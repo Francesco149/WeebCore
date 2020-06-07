@@ -593,10 +593,10 @@ void edSave1BPP(Editor editor) {
         wbArrayAppend(&crop, editor->textureData[y * editor->width + x]);
       }
     }
-    data = gRGBAArrayTo1BPP(crop);
+    data = gARGBArrayTo1BPP(crop);
     wbDestroyArray(crop);
   } else {
-    data = gRGBAArrayTo1BPP(editor->textureData);
+    data = gARGBArrayTo1BPP(editor->textureData);
   }
   base64Data = wbArrayToBase64(data);
   wbDestroyArray(data);

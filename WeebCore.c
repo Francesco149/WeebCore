@@ -310,10 +310,10 @@ int gAlphaBlend(int src, int dst);
 /* convert rgba pixels to 1bpp. all non-transparent colors become a 1 and transparency becomes 0.
  * the data is tightly packed (8 pixels per byte).
  * the returned data is an array and must be freed with wbArrayFree */
-char* gRGBATo1BPP(int* pixels, int numPixels);
-char* gRGBAArrayTo1BPP(int* pixels);
-int* g1BPPToRGBA(char* data, int numBytes);
-int* g1BPPArrayToRGBA(char* data);
+char* gARGBTo1BPP(int* pixels, int numPixels);
+char* gARGBArrayTo1BPP(int* pixels);
+int* g1BPPToARGB(char* data, int numBytes);
+int* g1BPPArrayToARGB(char* data);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                        BITMAP FONTS                                            */
@@ -1084,7 +1084,7 @@ char* wbArrayToBase64(char* data) {
   return wbToBase64(data, wbArrayLen(data));
 }
 
-char* gRGBATo1BPP(int* pixels, int numPixels) {
+char* gARGBTo1BPP(int* pixels, int numPixels) {
   char* data = 0;
   int i, j;
   for (i = 0; i < numPixels;) {
@@ -1099,11 +1099,11 @@ char* gRGBATo1BPP(int* pixels, int numPixels) {
   return data;
 }
 
-char* gRGBAArrayTo1BPP(int* pixels) {
-  return gRGBATo1BPP(pixels, wbArrayLen(pixels));
+char* gARGBArrayTo1BPP(int* pixels) {
+  return gARGBTo1BPP(pixels, wbArrayLen(pixels));
 }
 
-int* g1BPPToRGBA(char* data, int numBytes) {
+int* g1BPPToARGB(char* data, int numBytes) {
   int* result = 0;
   int i, j;
   for (i = 0; i < numBytes; ++i) {
@@ -1118,8 +1118,8 @@ int* g1BPPToRGBA(char* data, int numBytes) {
   return result;
 }
 
-int* g1BPPArrayToRGBA(char* data) {
-  return g1BPPToRGBA(data, wbArrayLen(data));
+int* g1BPPArrayToARGB(char* data) {
+  return g1BPPToARGB(data, wbArrayLen(data));
 }
 
 int gMix(int a, int b, float amount) {
@@ -1261,7 +1261,7 @@ GFont gDefaultFont() {
     "ciic8eg8MeIUie+IIEAAAAAAAAACAAIAAAAAgCAAAAAAACAEIIAAAAAAAAAcAAQAAAAAgCAAAAAAAcAAAAAAAAAAAAAAAA"
     "AAAAAAAAAAAAAAAAAAAAAA";
   char* data = wbArrayFromBase64(base64Data);
-  int* pixels = g1BPPArrayToRGBA(data);
+  int* pixels = g1BPPArrayToARGB(data);
   int charWidth = 6;
   int charHeight = 11;
   int width = charWidth * 0x20;
