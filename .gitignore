@@ -1,0 +1,6 @@
+*.txt
+*.bak
+out.wbspr
+/bin
+/obj
+*.log
