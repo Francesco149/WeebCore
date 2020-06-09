@@ -7,28 +7,30 @@
 char* edHelpString() {
   return (
     "Controls:\n"
-    "  Ctrl+S       save\n"
-    "  Ctrl+1       encode as 1bpp and save as .txt file containing a base64 string of the data.\n"
-    "               if a selection is active, the output is cropped to the selection\n"
-    "  Middle Drag  pan around\n"
-    "  Wheel Up     zoom in\n"
-    "  Wheel Down   zoom out\n"
-    "  E            switch to pencil\n"
-    "  Left Click   (pencil) draw with color 1\n"
-    "  Right Click  (pencil) draw with color 2\n"
-    "  C            switch to color picker. press again to expand/collapse. expanded mode lets\n"
-    "               you adjust colors with the ui, non-expanded picks from the pixels you click\n"
-    "  Left Click   (color picker) set color 1\n"
-    "  Right Click  (color picker) set color 2\n"
-    "  S            switch to selection mode\n"
-    "  Left Drag    (selection) select rectangle\n"
-    "  R            crop current selection to closest power-of-two size\n"
-    "  Shift+S      remove selection\n"
-    "  1            fill contents of selection with color 1\n"
-    "  2            fill contents of selection with color 2\n"
-    "  D            cut the contents of the selection. this will attach them to the selection\n"
-    "  Shift+D      undo cut. puts the contents of the cut back where they were\n"
-    "  T            (after cutting) paste the contents of the selection at the current location\n"
+    "\n"
+    "F1           toggle this help text\n"
+    "Ctrl+S       save\n"
+    "Ctrl+1       encode as 1bpp and save as .txt file containing a base64 string of the data.\n"
+    "             if a selection is active, the output is cropped to the selection\n"
+    "Middle Drag  pan around\n"
+    "Wheel Up     zoom in\n"
+    "Wheel Down   zoom out\n"
+    "E            switch to pencil\n"
+    "Left Click   (pencil) draw with color 1\n"
+    "Right Click  (pencil) draw with color 2\n"
+    "C            switch to color picker. press again to expand/collapse. expanded mode lets\n"
+    "             you adjust colors with the ui, non-expanded picks from the pixels you click\n"
+    "Left Click   (color picker) set color 1\n"
+    "Right Click  (color picker) set color 2\n"
+    "S            switch to selection mode\n"
+    "Left Drag    (selection) select rectangle\n"
+    "R            crop current selection to closest power-of-two size\n"
+    "Shift+S      remove selection\n"
+    "1            fill contents of selection with color 1\n"
+    "2            fill contents of selection with color 2\n"
+    "D            cut the contents of the selection. this will attach them to the selection\n"
+    "Shift+D      undo cut. puts the contents of the cut back where they were\n"
+    "T            (after cutting) paste the contents of the selection at the current location\n"
   );
 }
 
@@ -44,6 +46,7 @@ char* edHelpString() {
 #define ED_FSELECT (1<<5)
 #define ED_FALPHA_BLEND (1<<6)
 #define ED_FIGNORE_SELECTION (1<<7)
+#define ED_FHELP (1<<8)
 
 enum {
   ED_PENCIL,
@@ -85,6 +88,9 @@ typedef struct _Editor {
   int tool;
   int width, height;
   int lastDrawX, lastDrawY;
+
+  GFont font;
+  GMesh helpTextMesh, helpBackgroundMesh;
 
   float selBlinkTimer;
   GTexture selBorderTexture;
@@ -685,6 +691,10 @@ void edHandleKeyDown(Editor editor, int key, int state) {
       edFlushUpdates(editor);
       break;
     }
+    case OS_F1: {
+      editor->flags ^= ED_FHELP;
+      break;
+    }
   }
 }
 
@@ -865,6 +875,10 @@ void edDraw(Editor editor) {
   if (editor->tool == ED_COLOR_PICKER) {
     edDrawColorPicker(editor);
   }
+  if (editor->flags & ED_FHELP) {
+    gDrawMesh(editor->helpBackgroundMesh, 0, 0);
+    gDrawMesh(editor->helpTextMesh, 0, gFontTexture(editor->font));
+  }
   gSwapBuffers(editor->window);
 }
 
@@ -942,6 +956,17 @@ Editor edCreate(char* filePath) {
   editor->filePath = filePath ? filePath : "out.wbspr";
   editor->selBorderTexture = edCreateSelBorderTexture();
 
+  editor->flags |= ED_FHELP;
+  editor->font = gDefaultFont();
+  /* TODO: scale with screen size */
+  /* TODO: actual proper automatic ui layoutting */
+  editor->helpTextMesh = gCreateMesh();
+  gColor(editor->helpTextMesh, 0xbebebe);
+  gFont(editor->helpTextMesh, editor->font, 15, 15, edHelpString());
+  editor->helpBackgroundMesh = gCreateMesh();
+  gColor(editor->helpBackgroundMesh, 0x33000000);
+  gQuad(editor->helpBackgroundMesh, 5, 5, 610, 290);
+
   edResetSelection(editor);
   edUpdateColorPickerMesh(editor);
   edUpdateMesh(editor);
@@ -961,6 +986,7 @@ void edDestroy(Editor editor) {
     gDestroyMesh(editor->cutMesh);
     gDestroyMesh(editor->mesh);
     gDestroyMesh(editor->colorPickerMesh);
+    gDestroyMesh(editor->helpTextMesh);
     wbDestroyArray(editor->textureData);
     wbDestroyArray(editor->updates);
     gDestroyTexture(editor->texture);
@@ -970,6 +996,7 @@ void edDestroy(Editor editor) {
     gDestroyTransformBuilder(editor->transformBuilder);
     gDestroyTransformBuilder(editor->colorPickerTransformBuilder);
     gDestroyTransformBuilder(editor->cutTransformBuilder);
+    gDestroyFont(editor->font);
   }
   osFree(editor);
 }
