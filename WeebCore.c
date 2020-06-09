@@ -196,6 +196,13 @@ float maRectRight(float* rect);
 float maRectTop(float* rect);
 float maRectBottom(float* rect);
 int maPtInRect(float* rect, float x, float y); /* check if xy lies in rect. must be normalized. */
+int maRectIntersect(float* a, float* b);
+
+/* check that needle is entirely inside of haystack */
+int maRectInRect(float* needle, float* haystack);
+
+/* check that needle's area can entirely fit inside of haystack (ignores position) */
+int maRectInRectArea(float* needle, float* haystack);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                          WBSPR FORMAT                                          */
@@ -1382,6 +1389,24 @@ void maClampRect(float* rect, float* other) {
 
 int maPtInRect(float* rect, float x, float y) {
   return x >= rect[0] && x < rect[1] && y >= rect[2] && y < rect[3];
+}
+
+int maRectIntersect(float* a, float* b) {
+  return a[0] < b[1] && a[1] >= b[0] && a[2] < b[3] && a[3] >= b[2];
+}
+
+int maRectInRect(float* needle, float* haystack) {
+  return (
+    needle[0] >= haystack[0] && needle[1] < haystack[1] &&
+    needle[2] >= haystack[2] && needle[3] < haystack[3]
+  );
+}
+
+int maRectInRectArea(float* needle, float* haystack) {
+  return (
+    maRectWidth(needle) <= maRectWidth(haystack) &&
+    maRectHeight(needle) <= maRectHeight(haystack)
+  );
 }
 
 void maSetRectLeft(float* rect, float left)     { rect[0] = left; }
