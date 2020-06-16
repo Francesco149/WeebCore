@@ -54,7 +54,7 @@ typedef struct _Editor {
   Mat mat, matOrtho, bgMat;
 }* Editor;
 
-Wnd EdMkWnd() {
+Wnd MkEdWnd() {
   Wnd window = MkWnd();
   SetWndClass(window, "HelloWnd");
   SetWndName(window, "Hello WeebCore");
@@ -76,7 +76,7 @@ void EdUpdBMesh(Editor ed) {
   );
 }
 
-Mat EdMkBgMat() {
+Mat MkEdBgMat() {
   Mat mat = MkMat();
   return Scale1(mat, CHECKER_SIZE);
 }
@@ -97,17 +97,17 @@ void EdUpdTrans(Editor ed) {
   ed->matOrtho = ToTmpMatOrtho(trans);
 }
 
-Editor EdMk() {
+Editor MkEd() {
   Editor ed = Alloc(sizeof(struct _Editor));
   ed->scale = 4;
   ed->oX = 100;
   ed->oY = 100;
-  ed->window = EdMkWnd();
+  ed->window = MkEdWnd();
   ed->checkerTex = MkCheckerTex();
   ed->tex = MkTex();
   ed->texData = MkPixs(0xffffff, TEXSIZE, TEXSIZE);
   ed->trans = MkTrans();
-  ed->bgMat = EdMkBgMat();
+  ed->bgMat = MkEdBgMat();
 
   ed->mesh = MkMesh();
   Quad(ed->mesh, 0, 0, TEXSIZE, TEXSIZE);
@@ -119,7 +119,7 @@ Editor EdMk() {
   return ed;
 }
 
-void EdRm(Editor ed) {
+void RmEd(Editor ed) {
   if (ed) {
     RmWnd(ed->window);
     RmMesh(ed->mesh);
@@ -245,11 +245,11 @@ void EdPut(Editor ed) {
 }
 
 int main() {
-  Editor ed = EdMk();
+  Editor ed = MkEd();
   while (1) {
     while (NextMsg(ed->window)) {
       if (!EdHandleMsg(ed)) {
-        EdRm(ed);
+        RmEd(ed);
         return 0;
       }
     }
