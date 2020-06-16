@@ -125,8 +125,8 @@ int SurfWidth(Surf surf) { return surf->width; }
 int SurfHeight(Surf surf) { return surf->height; }
 void SurfCol(Surf surf, int col) { surf->col = col; }
 
-void SurfToTex(Surf surf, Tex tex) {
-  Pixs(tex, SurfWidth(surf), SurfHeight(surf), SurfPixs(surf));
+void SurfToImg(Surf surf, Img img) {
+  Pixs(img, SurfWidth(surf), SurfHeight(surf), SurfPixs(surf));
 }
 
 Mesh MkFrameMesh() {
@@ -135,22 +135,22 @@ Mesh MkFrameMesh() {
   return mesh;
 }
 
-Tex PutFrame() {
-  Tex tex = MkTex();
+Img PutFrame() {
+  Img img = MkImg();
   Surf surf = MkSurf(640, 480);
   SurfTri(surf, 0, -240, 320, 240, -320, 240);
   SurfTri(surf, 640, 240, 960, 720, 320, 720);
   SurfCol(surf, 0x7fff3333);
   SurfTri(surf, 200, 20, 620, 240, 20, 460);
-  SurfToTex(surf, tex);
+  SurfToImg(surf, img);
   RmSurf(surf);
-  return tex;
+  return img;
 }
 
 int main() {
   Wnd wnd = MkWnd();
   Mesh mesh = MkFrameMesh();
-  Tex tex = PutFrame();
+  Img img = PutFrame();
   SetWndClass(wnd, "WeebCoreSoftwareRenderer");
   SetWndName(wnd, "WeebCore - Software Renderer Demo");
   while (1) {
@@ -158,13 +158,13 @@ int main() {
       switch (MsgType(wnd)) {
         case QUIT: {
           RmMesh(mesh);
-          RmTex(tex);
+          RmImg(img);
           RmWnd(wnd);
           return 0;
         }
       }
     }
-    PutMesh(mesh, 0, tex);
+    PutMesh(mesh, 0, img);
     SwpBufs(wnd);
   }
   return 0;

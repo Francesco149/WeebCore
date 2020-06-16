@@ -209,9 +209,9 @@ int main() {
       RmMesh(mesh);
     }
 
-    PutMesh(help, 0, FtTex(font));
+    PutMesh(help, 0, FtImg(font));
     if (isFull) {
-      PutMesh(full, 0, FtTex(font));
+      PutMesh(full, 0, FtImg(font));
     }
     SwpBufs(wnd);
   }

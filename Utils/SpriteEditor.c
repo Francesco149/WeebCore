@@ -36,7 +36,7 @@ char* EdHelpString() {
 
 #define ED_FLUSH_TIME 1.0f
 #define ED_FLUSH_THRESHOLD 4096
-#define ED_TEXSIZE 1024
+#define ED_IMGSIZE 1024
 #define ED_CHECKER_SIZE 8
 
 #define ED_FDRAGGING (1<<1)
@@ -78,10 +78,10 @@ typedef struct _Ed {
   int scale;
   int cols[2];
   int colIndex;
-  Tex checkerTex;
+  Img checkerImg;
   Mesh mesh;
-  Tex texture;
-  int* textureData;
+  Img img;
+  int* imgData;
   EDUpd* updates;
   Trans trans;
   Mat mat, matOrtho;
@@ -93,14 +93,14 @@ typedef struct _Ed {
   Mesh helpTextMesh, helpBgMesh;
 
   float selBlinkTimer;
-  Tex selBorderTex;
+  Img selBorderImg;
   float selRect[4];          /* raw rectangle between the cursor and the initial drag position */
   float effectiveSelRect[4]; /* normalized, snapped, etc selection rect */
   int selAnchor;
 
-  Tex cutTex;
+  Img cutImg;
   int* cutData;
-  float cutPotRect[4]; /* power of two size of the cut texture */
+  float cutPotRect[4]; /* power of two size of the cut img */
   Mesh cutMesh;
   Mat cutMat;
   Trans cutTrans;
@@ -116,7 +116,7 @@ typedef struct _Ed {
   char* filePath;
 }* Ed;
 
-void EdMapToTex(Ed ed, float* point);
+void EdMapToImg(Ed ed, float* point);
 void EdFlushUpds(Ed ed);
 void EdClrSelection(Ed ed);
 void EdUpdMesh(Ed ed);
@@ -242,10 +242,10 @@ void EdPickCol(Ed ed) {
     float p[2];
     p[0] = MouseX(wnd);
     p[1] = MouseY(wnd);
-    EdMapToTex(ed, p);
+    EdMapToImg(ed, p);
     if (x >= 0 && x < ed->width && y >= 0 && y < ed->height) {
       ed->cols[ed->colIndex] =
-        ed->textureData[(int)p[1] * ed->width + (int)p[0]];
+        ed->imgData[(int)p[1] * ed->width + (int)p[0]];
     }
   }
 }
@@ -272,7 +272,7 @@ int* EdCreatePixsFromRegion(Ed ed, float* rect) {
   for (y = RectTop(rect); y < RectBot(rect); ++y) {
     for (x = RectLeft(rect); x < RectRight(rect); ++x) {
       if (PtInRect(extents, x, y)) {
-        ArrCat(&newData, ed->textureData[y * ed->width + x]);
+        ArrCat(&newData, ed->imgData[y * ed->width + x]);
       } else {
         ArrCat(&newData, 0xff000000);
       }
@@ -301,8 +301,8 @@ void EdCrop(Ed ed, float* rect) {
   newData = EdCreatePixsFromRegion(ed, potRect);
 
   /* refresh everything */
-  RmArr(ed->textureData);
-  ed->textureData = newData;
+  RmArr(ed->imgData);
+  ed->imgData = newData;
   ed->width = RectWidth(potRect);
   ed->height = RectHeight(potRect);
   EdClrSelection(ed);
@@ -313,19 +313,19 @@ void EdCrop(Ed ed, float* rect) {
 
 /* TODO: clean up this mess, maybe use a generic ui function to draw rectangles with borders */
 
-/* the way this works is i have a 4x4 texture with a black square in the middle and a transparent
- * 1px border. by using texture coord offsets and messing with the repeat mode, I can reuse the
- * texture to draw all 4 sides of the dashed selection border */
+/* the way this works is i have a 4x4 img with a black square in the middle and a transparent
+ * 1px border. by using img coord offsets and messing with the repeat mode, I can reuse the
+ * img to draw all 4 sides of the dashed selection border */
 
 void EdDashBorderH(Ed ed, Mesh mesh, float* rect, float off, int col) {
   float uSize = RectWidth(rect) * ed->scale;
   float vSize = RectHeight(rect) * ed->scale;
   Col(mesh, col);
-  TexdQuad(mesh,
+  ImgQuad(mesh,
     RectX(rect)    , RectY(rect)     , 1 + off, 1,
     RectWidth(rect), RectHeight(rect), uSize  , vSize * 2
   );
-  TexdQuad(mesh,
+  ImgQuad(mesh,
     RectX(rect)    , RectY(rect)     , 1 - off, -vSize * 2 + 2,
     RectWidth(rect), RectHeight(rect), uSize  ,  vSize * 2
   );
@@ -335,11 +335,11 @@ void EdDashBorderV(Ed ed, Mesh mesh, float* rect, float off, int col) {
   float uSize = RectWidth(rect) * ed->scale;
   float vSize = RectHeight(rect) * ed->scale;
   Col(mesh, col);
-  TexdQuad(mesh,
+  ImgQuad(mesh,
     RectX(rect)    , RectY(rect)     , 1        , 1 - off,
     RectWidth(rect), RectHeight(rect), uSize * 2, vSize
   );
-  TexdQuad(mesh,
+  ImgQuad(mesh,
     RectX(rect)    , RectY(rect)     , -uSize * 2 + 2, 1 + off,
     RectWidth(rect), RectHeight(rect),  uSize * 2    , vSize
   );
@@ -379,7 +379,7 @@ void EdYank(Ed ed) {
   MemCpy(ed->cutSourceRect, rect, sizeof(float) * 4);
   MemCpy(potRect, rect, sizeof(float) * 4);
   ed->cutData = EdCreatePixsFromRegion(ed, potRect);
-  Pixs(ed->cutTex, RectWidth(potRect), RectHeight(potRect), ed->cutData);
+  Pixs(ed->cutImg, RectWidth(potRect), RectHeight(potRect), ed->cutData);
   ed->cutMesh = MkMesh();
   Quad(ed->cutMesh, 0, 0, RectWidth(rect), RectHeight(rect));
   EdFillRect(ed, rect, 0xff000000);
@@ -418,7 +418,7 @@ void EdBeginSelect(Ed ed) {
       EdClrSelection(ed);
       p[0] = MouseX(ed->wnd);
       p[1] = MouseY(ed->wnd);
-      EdMapToTex(ed, p);
+      EdMapToImg(ed, p);
       SetRectLeft(ed->selRect, p[0]);
       SetRectTop(ed->selRect, p[1]);
       SetRectSize(ed->selRect, 0, 0);
@@ -429,20 +429,20 @@ void EdBeginSelect(Ed ed) {
 }
 
 void EdSelectedRect(Ed ed, float* rect) {
-  float textureRect[4];
+  float imgRect[4];
   float xoff = 1.5f, yoff = 1.5f;
   MemCpy(rect, ed->selRect, sizeof(float) * 4);
   if (RectWidth(rect) < 0) xoff *= -1;
   if (RectHeight(rect) < 0) yoff *= -1;
   SetRectSize(rect, (int)(RectWidth(rect) + xoff), (int)(RectHeight(rect) + yoff));
   NormRect(rect);
-  SetRect(textureRect, 0, ed->width, 0, ed->height);
-  ClampRect(rect, textureRect);
+  SetRect(imgRect, 0, ed->width, 0, ed->height);
+  ClampRect(rect, imgRect);
   FloorFlts(4, rect, rect);
 }
 
 void EdPutSelect(Ed ed) {
-  Tex texture = ed->selBorderTex;
+  Img img = ed->selBorderImg;
   float* rect = ed->effectiveSelRect;
   Mesh meshH = MkMesh();
   Mesh meshV = MkMesh();
@@ -454,13 +454,13 @@ void EdPutSelect(Ed ed) {
   EdDashBorderV(ed, meshV, rect, off + 0, 0xffffff);
   EdDashBorderV(ed, meshV, rect, off + 2, 0x000000);
 
-  SetTexWrapU(texture, REPEAT);
-  SetTexWrapV(texture, CLAMP_TO_EDGE);
-  PutMesh(meshH, ed->mat, texture);
+  SetImgWrapU(img, REPEAT);
+  SetImgWrapV(img, CLAMP_TO_EDGE);
+  PutMesh(meshH, ed->mat, img);
 
-  SetTexWrapU(texture, CLAMP_TO_EDGE);
-  SetTexWrapV(texture, REPEAT);
-  PutMesh(meshV, ed->mat, texture);
+  SetImgWrapU(img, CLAMP_TO_EDGE);
+  SetImgWrapV(img, REPEAT);
+  PutMesh(meshV, ed->mat, img);
 
   RmMesh(meshH);
   RmMesh(meshV);
@@ -481,7 +481,7 @@ void EdPuting(Ed ed) {
       float point[2];
       point[0] = MouseX(ed->wnd);
       point[1] = MouseY(ed->wnd);
-      EdMapToTex(ed, point);
+      EdMapToImg(ed, point);
       if (EdUpdPutRateLimiter(ed)) {
         /* alpha blend unless we're deleting the pixel with complete transparency */
         EdPutPix(ed, (int)point[0], (int)point[1], col,
@@ -500,7 +500,7 @@ void EdPuting(Ed ed) {
           float p[2];
           p[0] = MouseX(ed->wnd);
           p[1] = MouseY(ed->wnd);
-          EdMapToTex(ed, p);
+          EdMapToImg(ed, p);
           SetRectRight(ed->selRect, p[0]);
           SetRectBot(ed->selRect, p[1]);
           break;
@@ -544,8 +544,8 @@ void EdUpdMesh(Ed ed) {
   Quad(ed->mesh, 0, 0, ed->width, ed->height);
 }
 
-void EdMapToTex(Ed ed, float* point) {
-  /* un-mat mouse coordinates so they are relative to the texture */
+void EdMapToImg(Ed ed, float* point) {
+  /* un-mat mouse coordinates so they are relative to the img */
   InvTransPt(ed->matOrtho, point);
   point[0] /= ed->scale;
   point[1] /= ed->scale;
@@ -558,7 +558,7 @@ void EdChangeScale(Ed ed, int direction) {
   newScale = Max(1, newScale);
   p[0] = MouseX(ed->wnd);
   p[1] = MouseY(ed->wnd);
-  EdMapToTex(ed, p);
+  EdMapToImg(ed, p);
   /* adjust panning so the pixel we're pointing stays under the cursor */
   ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale));
   ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale));
@@ -569,7 +569,7 @@ void EdChangeScale(Ed ed, int direction) {
 void EdSave(Ed ed) {
   char* spr;
   EdFlushUpds(ed);
-  spr = ArgbToSprArr(ed->textureData, ed->width, ed->height);
+  spr = ArgbToSprArr(ed->imgData, ed->width, ed->height);
   WriteFile(ed->filePath, spr, ArrLen(spr));
   RmArr(spr);
 }
@@ -584,13 +584,13 @@ void EdSaveOneBpp(Ed ed) {
     int* crop = 0;
     for (y = RectTop(rect); y < RectBot(rect); ++y) {
       for (x = RectLeft(rect); x < RectRight(rect); ++x) {
-        ArrCat(&crop, ed->textureData[y * ed->width + x]);
+        ArrCat(&crop, ed->imgData[y * ed->width + x]);
       }
     }
     data = ArgbArrToOneBpp(crop);
     RmArr(crop);
   } else {
-    data = ArgbArrToOneBpp(ed->textureData);
+    data = ArgbArrToOneBpp(ed->imgData);
   }
   b64Data = ArrToB64(data);
   RmArr(data);
@@ -605,8 +605,8 @@ void EdLoad(Ed ed) {
   Spr spr = MkSprFromFile(ed->filePath);
   if (spr) {
     EdFlushUpds(ed);
-    RmArr(ed->textureData);
-    ed->textureData = SprToArgbArr(spr);
+    RmArr(ed->imgData);
+    ed->imgData = SprToArgbArr(spr);
     ed->width = SprWidth(spr);
     ed->height = SprHeight(spr);
     EdUpdMesh(ed);
@@ -748,7 +748,7 @@ void EdPutPix(Ed ed, int x, int y, int col, int flags) {
     ClampRect(rect, ed->effectiveSelRect);
   }
   if (PtInRect(rect, x, y)) {
-    int* px = &ed->textureData[y * ed->width + x];
+    int* px = &ed->imgData[y * ed->width + x];
     if (flags & ED_FALPHA_BLEND) {
       /* normal alpha blending with whatever is currently here */
       fcol = AlphaBlend(col, *px);
@@ -767,7 +767,7 @@ void EdPutPix(Ed ed, int x, int y, int col, int flags) {
 }
 
 void EdFlushUpds(Ed ed) {
-  Pixs(ed->texture, ed->width, ed->height, ed->textureData);
+  Pixs(ed->img, ed->width, ed->height, ed->imgData);
   SetArrLen(ed->updates, 0);
   ed->flags &= ~ED_FDIRTY;
 }
@@ -781,7 +781,7 @@ int EdUpdPutRateLimiter(Ed ed) {
   int x, y;
   p[0] = MouseX(ed->wnd);
   p[1] = MouseY(ed->wnd);
-  EdMapToTex(ed, p);
+  EdMapToImg(ed, p);
   x = (int)p[0];
   y = (int)p[1];
   if (x != ed->lastPutX || y != ed->lastPutY) {
@@ -846,13 +846,13 @@ void EdPutBorders(Ed ed) {
 }
 
 void EdPut(Ed ed) {
-  PutMesh(ed->mesh, ed->mat, ed->checkerTex);
-  PutMesh(ed->mesh, ed->mat, ed->texture);
+  PutMesh(ed->mesh, ed->mat, ed->checkerImg);
+  PutMesh(ed->mesh, ed->mat, ed->img);
   EdPutBorders(ed);
   EdPutUpds(ed);
   if (ed->cutMesh) {
     Mat copy = DupMat(ed->cutMat);
-    PutMesh(ed->cutMesh, MulMat(copy, ed->mat), ed->cutTex);
+    PutMesh(ed->cutMesh, MulMat(copy, ed->mat), ed->cutImg);
     RmMat(copy);
   }
   if (ed->flags & ED_FSELECT) {
@@ -863,7 +863,7 @@ void EdPut(Ed ed) {
   }
   if (ed->flags & ED_FHELP) {
     PutMesh(ed->helpBgMesh, 0, 0);
-    PutMesh(ed->helpTextMesh, 0, FtTex(ed->font));
+    PutMesh(ed->helpTextMesh, 0, FtImg(ed->font));
   }
   SwpBufs(ed->wnd);
 }
@@ -882,29 +882,29 @@ int EdSampleCheckerboard(float x, float y) {
   return data[((int)y % 2) * 2 + ((int)x % 2)];
 }
 
-Tex EdCreateCheckerTex() {
+Img EdCreateCheckerImg() {
   int x, y;
   int* data = 0;
-  Tex texture = MkTex();
+  Img img = MkImg();
   for (y = 0; y < ED_CHECKER_SIZE * 2; ++y) {
     for (x = 0; x < ED_CHECKER_SIZE * 2; ++x) {
       ArrCat(&data, EdSampleCheckerboard(x, y));
     }
   }
-  Pixs(texture, ED_CHECKER_SIZE * 2, ED_CHECKER_SIZE * 2, data);
+  Pixs(img, ED_CHECKER_SIZE * 2, ED_CHECKER_SIZE * 2, data);
   RmArr(data);
-  return texture;
+  return img;
 }
 
-Tex EdCreateSelBorderTex() {
-  Tex texture = MkTex();
+Img EdCreateSelBorderImg() {
+  Img img = MkImg();
   int data[4*4] = {
     0xff000000, 0xff000000, 0xff000000, 0xff000000,
     0xff000000, 0x00ffffff, 0x00ffffff, 0xff000000,
     0xff000000, 0x00ffffff, 0x00ffffff, 0xff000000,
     0xff000000, 0xff000000, 0xff000000, 0xff000000
   };
-  return Pixs(texture, 4, 4, data);
+  return Pixs(img, 4, 4, data);
 }
 
 int* EdCreatePixs(int fillCol, int width, int height) {
@@ -925,12 +925,12 @@ Ed EdCreate(char* filePath) {
   Ed ed = Alloc(sizeof(struct _Ed));
   ed->scale = 4;
   ed->wnd = EdCreateWnd();
-  ed->checkerTex = EdCreateCheckerTex();
-  ed->texture = MkTex();
-  ed->cutTex = MkTex();
-  ed->width = ED_TEXSIZE;
-  ed->height = ED_TEXSIZE;
-  ed->textureData = EdCreatePixs(0xff000000, ed->width, ed->height);
+  ed->checkerImg = EdCreateCheckerImg();
+  ed->img = MkImg();
+  ed->cutImg = MkImg();
+  ed->width = ED_IMGSIZE;
+  ed->height = ED_IMGSIZE;
+  ed->imgData = EdCreatePixs(0xff000000, ed->width, ed->height);
   ed->trans = MkTrans();
   ed->colPickerTrans = MkTrans();
   ed->cutTrans = MkTrans();
@@ -938,7 +938,7 @@ Ed EdCreate(char* filePath) {
   ed->grey = 0xffffff;
   ed->cols[1] = 0xff000000;
   ed->filePath = filePath ? filePath : "out.wbspr";
-  ed->selBorderTex = EdCreateSelBorderTex();
+  ed->selBorderImg = EdCreateSelBorderImg();
 
   ed->flags |= ED_FHELP;
   ed->font = DefFt();
@@ -972,12 +972,12 @@ void RmEd(Ed ed) {
     RmMesh(ed->colPickerMesh);
     RmMesh(ed->helpTextMesh);
     RmMesh(ed->helpBgMesh);
-    RmArr(ed->textureData);
+    RmArr(ed->imgData);
     RmArr(ed->updates);
-    RmTex(ed->texture);
-    RmTex(ed->cutTex);
-    RmTex(ed->checkerTex);
-    RmTex(ed->selBorderTex);
+    RmImg(ed->img);
+    RmImg(ed->cutImg);
+    RmImg(ed->checkerImg);
+    RmImg(ed->selBorderImg);
     RmTrans(ed->trans);
     RmTrans(ed->colPickerTrans);
     RmTrans(ed->cutTrans);

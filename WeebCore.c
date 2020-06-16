@@ -69,13 +69,13 @@ int ReadFile(char* path, void* data, int maxSize);
 
 /* opaque handles */
 typedef struct _Mesh* Mesh;
-typedef struct _Tex* Tex;
+typedef struct _Img* Img;
 typedef struct _Mat* Mat;
 typedef struct _Trans* Trans;
 
 /* ---------------------------------------------------------------------------------------------- */
 
-/* Mesh is a collection of vertices that will be rendered using the same tex and trans. try
+/* Mesh is a collection of vertices that will be rendered using the same img and trans. try
  * to batch up as much stuff into a mesh as possible for optimal performance. */
 
 Mesh MkMesh();
@@ -92,9 +92,9 @@ void Col(Mesh mesh, int color);
 void Begin(Mesh mesh);
 void End(Mesh mesh);
 void Vert(Mesh mesh, float x, float y);
-void TexCoord(Mesh mesh, float u, float v);
+void ImgCoord(Mesh mesh, float u, float v);
 void Face(Mesh mesh, int i1, int i2, int i3);
-void PutMesh(Mesh mesh, Mat mat, Tex tex);
+void PutMesh(Mesh mesh, Mat mat, Img img);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -117,29 +117,29 @@ Mat MulMatFlt(Mat mat, float* matIn);
 
 /* ---------------------------------------------------------------------------------------------- */
 
-Tex MkTex();
-void RmTex(Tex tex);
+Img MkImg();
+void RmImg(Img img);
 
-/* set wrap mode for tex coordinates. default is REPEAT */
-void SetTexWrapU(Tex tex, int mode);
-void SetTexWrapV(Tex tex, int mode);
+/* set wrap mode for img coordinates. default is REPEAT */
+void SetImgWrapU(Img img, int mode);
+void SetImgWrapV(Img img, int mode);
 
-/* set min/mag filter for tex. default is NEAREST */
-void SetTexMinFilter(Tex tex, int filter);
-void SetTexMagFilter(Tex tex, int filter);
+/* set min/mag filter for img. default is NEAREST */
+void SetImgMinFilter(Img img, int filter);
+void SetImgMagFilter(Img img, int filter);
 
-/* set the tex's pix data. must be an array of 0xAARRGGBB colors as explained in Col.
+/* set the img's pix data. must be an array of 0xAARRGGBB colors as explained in Col.
  * pixs are laid out row major - for example a 4x4 image would be:
  * { px00, px10, px01, px11 }
- * note that this is usually an expensive call. only update the tex data when it's actually
+ * note that this is usually an expensive call. only update the img data when it's actually
  * changing.
- * return tex for convenience */
-Tex Pixs(Tex tex, int width, int height, int* data);
+ * return img for convenience */
+Img Pixs(Img img, int width, int height, int* data);
 
 /* same as Pixs but you can specify stride which is how many bytes are between the beginning
  * of each row, for cases when you have extra padding or when you're submitting a sub-region of a
  * bigger image */
-Tex PixsEx(Tex tex, int width, int height, int* data, int stride);
+Img PixsEx(Img img, int width, int height, int* data, int stride);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -283,14 +283,17 @@ void InvTransPt(Mat mat, float* point);
 
 /* add a rectangle to mesh */
 void Quad(Mesh mesh, float x, float y, float width, float height);
-void TexdQuad(Mesh mesh,
+
+/* add a textured rectangle to mesh. note that the u/v coordinates are in pixels, since we usually
+ * want to work pixel-perfect in 2d */
+void ImgQuad(Mesh mesh,
   float x, float y, float u, float v,
   float width, float height, float uWidth, float vHeight
 );
 
 /* add a triangle to mesh */
 void Tri(Mesh mesh, float x1, float y1, float x2, float y2, float x3, float y3);
-void TexdTri(Mesh mesh,
+void ImgTri(Mesh mesh,
   float x1, float y1, float u1, float v1,
   float x2, float y2, float u2, float v2,
   float x3, float y3, float u3, float v3
@@ -351,10 +354,10 @@ Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight);
 Ft DefFt();
 
 void RmFt(Ft ft);
-Tex FtTex(Ft ft);
+Img FtImg(Ft ft);
 
-/* generate vertices and uv's for drawing string. must be rendered with the ft tex from
- * FtTex or a tex that has the same exact layout */
+/* generate vertices and uv's for drawing string. must be rendered with the ft img from
+ * FtImg or a img that has the same exact layout */
 void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string);
 
 void PutFt(Ft ft, int x, int y, char* string);
@@ -609,19 +612,19 @@ enum {
   LAST_KEY
 };
 
-/* tex wrap modes */
+/* img wrap modes */
 enum {
   CLAMP_TO_EDGE,
   MIRRORED_REPEAT,
   REPEAT,
-  LAST_TEXTURE_WRAP
+  LAST_IMG_WRAP
 };
 
-/* tex filters */
+/* img filters */
 enum {
   NEAREST,
   LINEAR,
-  LAST_TEXTURE_FILTER
+  LAST_IMG_FILTER
 };
 
 #endif /* WEEBCORE_HEADER */
@@ -907,7 +910,7 @@ void InvTransPt(Mat mat, float* point) {
   RmMat(copy);
 }
 
-void TexdTri(Mesh mesh,
+void ImgTri(Mesh mesh,
   float x1, float y1, float u1, float v1,
   float x2, float y2, float u2, float v2,
   float x3, float y3, float u3, float v3
@@ -921,25 +924,25 @@ void TexdTri(Mesh mesh,
     i2 = 2, i3 = 1;
   }
   Begin(mesh);
-  Vert(mesh, x1, y1); TexCoord(mesh, u1, v1);
-  Vert(mesh, x2, y2); TexCoord(mesh, u2, v2);
-  Vert(mesh, x3, y3); TexCoord(mesh, u3, v3);
+  Vert(mesh, x1, y1); ImgCoord(mesh, u1, v1);
+  Vert(mesh, x2, y2); ImgCoord(mesh, u2, v2);
+  Vert(mesh, x3, y3); ImgCoord(mesh, u3, v3);
   Face(mesh, 0, i2, i3);
   End(mesh);
 }
 
 void Tri(Mesh mesh, float x1, float y1, float x2, float y2, float x3, float y3) {
-  TexdTri(mesh, x1, y1, 0, 0, x2, y2, 0, 0, x3, y3, 0, 0);
+  ImgTri(mesh, x1, y1, 0, 0, x2, y2, 0, 0, x3, y3, 0, 0);
 }
 
-void TexdQuad(Mesh mesh, float x, float y, float u, float v,
+void ImgQuad(Mesh mesh, float x, float y, float u, float v,
   float width, float height, float uWidth, float vHeight)
 {
   Begin(mesh);
-  Vert(mesh, x        , y         ); TexCoord(mesh, u         , v          );
-  Vert(mesh, x        , y + height); TexCoord(mesh, u         , v + vHeight);
-  Vert(mesh, x + width, y + height); TexCoord(mesh, u + uWidth, v + vHeight);
-  Vert(mesh, x + width, y         ); TexCoord(mesh, u + uWidth, v          );
+  Vert(mesh, x        , y         ); ImgCoord(mesh, u         , v          );
+  Vert(mesh, x        , y + height); ImgCoord(mesh, u         , v + vHeight);
+  Vert(mesh, x + width, y + height); ImgCoord(mesh, u + uWidth, v + vHeight);
+  Vert(mesh, x + width, y         ); ImgCoord(mesh, u + uWidth, v          );
   Face(mesh, 0, 1, 2);
   Face(mesh, 0, 2, 3);
   End(mesh);
@@ -947,7 +950,7 @@ void TexdQuad(Mesh mesh, float x, float y, float u, float v,
 
 
 void Quad(Mesh mesh, float x, float y, float width, float height) {
-  TexdQuad(mesh, x, y, 0, 0, width, height, width, height);
+  ImgQuad(mesh, x, y, 0, 0, width, height, width, height);
 }
 
 
@@ -1177,7 +1180,7 @@ void AlphaBlendp(int* dst, int src) {
 /* ---------------------------------------------------------------------------------------------- */
 
 struct _Ft {
-  Tex tex;
+  Img img;
   int charWidth, charHeight;
 };
 
@@ -1186,12 +1189,12 @@ Ft MkFtFromSimpleGrid(int* pixs, int width, int height, int charWidth, int charH
   if (ft) {
     int* decolored = 0;
     int i;
-    ft->tex = MkTex();
+    ft->img = MkImg();
     for (i = 0; i < width * height; ++i) {
       /* we want the base pixs to be white so it can be colored */
       ArrCat(&decolored, pixs[i] | 0xffffff);
     }
-    Pixs(ft->tex, width, height, decolored);
+    Pixs(ft->img, width, height, decolored);
     RmArr(decolored);
     ft->charWidth = charWidth;
     ft->charHeight = charHeight;
@@ -1203,10 +1206,10 @@ Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight) {
   Spr spr = MkSprFromFile(filePath);
   if (spr) {
     Ft ft;
-    int* texData = SprToArgbArr(spr);
+    int* imgData = SprToArgbArr(spr);
     int width = SprWidth(spr), height = SprHeight(spr);
-    ft = MkFtFromSimpleGrid(texData, width, height, charWidth, charHeight);
-    RmArr(texData);
+    ft = MkFtFromSimpleGrid(imgData, width, height, charWidth, charHeight);
+    RmArr(imgData);
     RmSpr(spr);
     return ft;
   }
@@ -1215,12 +1218,12 @@ Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight) {
 
 void RmFt(Ft ft) {
   if (ft) {
-    RmTex(ft->tex);
+    RmImg(ft->img);
   }
   Free(ft);
 }
 
-Tex FtTex(Ft ft) { return ft->tex; }
+Img FtImg(Ft ft) { return ft->img; }
 
 static int* PadPixs(int* pixs, int width, int height, int newWidth, int newHeight) {
   int* newPixs = 0;
@@ -1282,7 +1285,7 @@ void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string) {
     if (c >= 0x20) {
       int u = ((c - 0x20) % 0x20) * width;
       int v = ((c - 0x20) / 0x20) * height;
-      TexdQuad(mesh, x, y, u, v, width, height, width, height);
+      ImgQuad(mesh, x, y, u, v, width, height, width, height);
       x += width;
     } else if (c == '\n') {
       y += height;
@@ -1296,7 +1299,7 @@ void PutFt(Ft ft, int x, int y, char* string) {
   Mesh mesh = MkMesh();
   FtMesh(mesh, ft, x, y, string);
   SetPos(trans, x, y);
-  PutMesh(mesh, ToTmpMat(trans), FtTex(ft));
+  PutMesh(mesh, ToTmpMat(trans), FtImg(ft));
   RmMesh(mesh);
 }
 

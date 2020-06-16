@@ -3,16 +3,16 @@
  * left click drag to draw
  * mouse wheel to zoom
  *
- * to avoid updating the tex for every new pix, the pixs are batched up and temporarily
- * rendered as individual quads until they are flushed to the real tex */
+ * to avoid updating the img for every new pix, the pixs are batched up and temporarily
+ * rendered as individual quads until they are flushed to the real img */
 
 #include "WeebCore.c"
 
-Tex MkCheckerTex() {
-  Tex tex;
+Img MkCheckerImg() {
+  Img img;
   int data[4] = { 0xaaaaaa, 0x666666, 0x666666, 0xaaaaaa };
-  tex = MkTex();
-  return Pixs(tex, 2, 2, data);
+  img = MkImg();
+  return Pixs(img, 2, 2, data);
 }
 
 int* MkPixs(int fillCol, int width, int height) {
@@ -24,7 +24,7 @@ int* MkPixs(int fillCol, int width, int height) {
   return data;
 }
 
-#define TEXSIZE 1024
+#define IMGSIZE 1024
 #define CHECKER_SIZE 64
 
 #define DRAGGING (1<<1)
@@ -44,10 +44,10 @@ typedef struct _Editor {
   int scale;
   int color;
   Mesh bgMesh;
-  Tex checkerTex;
+  Img checkerImg;
   Mesh mesh;
-  Tex tex;
-  int* texData;
+  Img img;
+  int* imgData;
   EDUpd* updates;
   Trans trans;
   Mat mat, matOrtho, bgMat;
@@ -61,7 +61,7 @@ Wnd MkEdWnd() {
 }
 
 void EdFlushUpds(Editor ed) {
-  Pixs(ed->tex, TEXSIZE, TEXSIZE, ed->texData);
+  Pixs(ed->img, IMGSIZE, IMGSIZE, ed->imgData);
   SetArrLen(ed->updates, 0);
   ed->flags &= ~DIRTY;
 }
@@ -80,8 +80,8 @@ Mat MkEdBgMat() {
   return Scale1(mat, CHECKER_SIZE);
 }
 
-void EdMapToTex(Editor ed, float* point) {
-  /* un-trans mouse coordinates so they are relative to the tex */
+void EdMapToImg(Editor ed, float* point) {
+  /* un-trans mouse coordinates so they are relative to the img */
   InvTransPt(ed->matOrtho, point);
   point[0] /= ed->scale;
   point[1] /= ed->scale;
@@ -102,14 +102,14 @@ Editor MkEd() {
   ed->oX = 100;
   ed->oY = 100;
   ed->window = MkEdWnd();
-  ed->checkerTex = MkCheckerTex();
-  ed->tex = MkTex();
-  ed->texData = MkPixs(0xffffff, TEXSIZE, TEXSIZE);
+  ed->checkerImg = MkCheckerImg();
+  ed->img = MkImg();
+  ed->imgData = MkPixs(0xffffff, IMGSIZE, IMGSIZE);
   ed->trans = MkTrans();
   ed->bgMat = MkEdBgMat();
 
   ed->mesh = MkMesh();
-  Quad(ed->mesh, 0, 0, TEXSIZE, TEXSIZE);
+  Quad(ed->mesh, 0, 0, IMGSIZE, IMGSIZE);
 
   EdFlushUpds(ed);
   EdUpdBMesh(ed);
@@ -123,10 +123,10 @@ void RmEd(Editor ed) {
     RmWnd(ed->window);
     RmMesh(ed->mesh);
     RmMesh(ed->bgMesh);
-    RmArr(ed->texData);
+    RmArr(ed->imgData);
     RmArr(ed->updates);
-    RmTex(ed->tex);
-    RmTex(ed->checkerTex);
+    RmImg(ed->img);
+    RmImg(ed->checkerImg);
     RmTrans(ed->trans);
     RmMat(ed->bgMat);
   }
@@ -138,11 +138,11 @@ void EdPutPix(Editor ed) {
   float point[2];
   point[0] = MouseX(ed->window);
   point[1] = MouseY(ed->window);
-  EdMapToTex(ed, point);
+  EdMapToImg(ed, point);
   x = (int)point[0];
   y = (int)point[1];
-  if (x >= 0 && x < TEXSIZE && y >= 0 && y < TEXSIZE) {
-    int* px = &ed->texData[y * TEXSIZE + x];
+  if (x >= 0 && x < IMGSIZE && y >= 0 && y < IMGSIZE) {
+    int* px = &ed->imgData[y * IMGSIZE + x];
     if (*px != ed->color) {
       EDUpd* u;
       *px = ed->color;
@@ -162,7 +162,7 @@ void EdChangeScale(Editor ed, int direction) {
   newScale = Max(1, newScale);
   p[0] = MouseX(ed->window);
   p[1] = MouseY(ed->window);
-  EdMapToTex(ed, p);
+  EdMapToImg(ed, p);
   /* adjust panning so the pix we're pointing stays under the cursor */
   ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale) + 0.5f);
   ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale) + 0.5f);
@@ -237,8 +237,8 @@ void EdPutUpds(Editor ed) {
 }
 
 void EdPut(Editor ed) {
-  PutMesh(ed->bgMesh, ed->bgMat, ed->checkerTex);
-  PutMesh(ed->mesh, ed->mat, ed->tex);
+  PutMesh(ed->bgMesh, ed->bgMat, ed->checkerImg);
+  PutMesh(ed->mesh, ed->mat, ed->img);
   EdPutUpds(ed);
   SwpBufs(ed->window);
 }

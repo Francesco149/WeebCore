@@ -16,7 +16,7 @@ struct _Mesh {
   int istart;
 };
 
-struct _Tex { GLuint handle; int width, height; };
+struct _Img { GLuint handle; int width, height; };
 
 typedef struct _MatOp {
   int type;
@@ -94,7 +94,7 @@ void Vert(Mesh mesh, float x, float y) {
   vertex->color = mesh->color;
 }
 
-void TexCoord(Mesh mesh, float u, float v) {
+void ImgCoord(Mesh mesh, float u, float v) {
   int len = ArrLen(mesh->verts);
   if (len) {
     VertData* vertex = &mesh->verts[len - 1];
@@ -232,29 +232,29 @@ Mat MulMat(Mat mat, Mat other) {
   return MulMatFlt(mat, other->mat);
 }
 
-void PutMesh(Mesh mesh, Mat mat, Tex tex) {
+void PutMesh(Mesh mesh, Mat mat, Img img) {
   int stride = sizeof(VertData);
-  GLuint gltex, curTex;
+  GLuint gltex, curImg;
 
   if (!ArrLen(mesh->indices)) {
     return;
   }
 
-  gltex = tex ? tex->handle : 0;
+  gltex = img ? img->handle : 0;
   glVertexPointer(2, GL_FLOAT, stride, &mesh->verts[0].x);
   glColorPointer(4, GL_UNSIGNED_BYTE, stride, &mesh->verts[0].color);
   if (gltex) {
     glTexCoordPointer(2, GL_FLOAT, stride, &mesh->verts[0].u);
-    /* scale tex coords so we can use pixs instead of texels */
+    /* scale img coords so we can use pixs instead of texels */
     glPushAttrib(GL_TRANSFORM_BIT);
     glMatrixMode(GL_TEXTURE);
     glLoadIdentity();
-    glScalef(1.0f / tex->width, 1.0f / tex->height, 1.0f);
+    glScalef(1.0f / img->width, 1.0f / img->height, 1.0f);
     glPopAttrib();
   }
 
-  glGetIntegerv(GL_TEXTURE_BINDING_2D, (void*)&curTex);
-  if (gltex != curTex) {
+  glGetIntegerv(GL_TEXTURE_BINDING_2D, (void*)&curImg);
+  if (gltex != curImg) {
     glBindTexture(GL_TEXTURE_2D, gltex);
   }
 
@@ -265,24 +265,24 @@ void PutMesh(Mesh mesh, Mat mat, Tex tex) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-Tex MkTex() {
-  Tex tex = Alloc(sizeof(struct _Tex));
-  glGenTextures(1, &tex->handle);
-  SetTexWrapU(tex, REPEAT);
-  SetTexWrapV(tex, REPEAT);
-  SetTexMinFilter(tex, NEAREST);
-  SetTexMagFilter(tex, NEAREST);
-  return tex;
+Img MkImg() {
+  Img img = Alloc(sizeof(struct _Img));
+  glGenTextures(1, &img->handle);
+  SetImgWrapU(img, REPEAT);
+  SetImgWrapV(img, REPEAT);
+  SetImgMinFilter(img, NEAREST);
+  SetImgMagFilter(img, NEAREST);
+  return img;
 }
 
-void RmTex(Tex tex) {
-  if (tex) {
-    glDeleteTextures(1, &tex->handle);
+void RmImg(Img img) {
+  if (img) {
+    glDeleteTextures(1, &img->handle);
   }
-  Free(tex);
+  Free(img);
 }
 
-static int ConvTexWrap(int mode) {
+static int ConvImgWrap(int mode) {
   switch (mode) {
     case CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
     case MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
@@ -291,7 +291,7 @@ static int ConvTexWrap(int mode) {
   return REPEAT;
 }
 
-static int ConvTexFilter(int filter) {
+static int ConvImgFilter(int filter) {
   switch (filter) {
     case NEAREST: return GL_NEAREST;
     case LINEAR: return GL_LINEAR;
@@ -299,32 +299,32 @@ static int ConvTexFilter(int filter) {
   return NEAREST;
 }
 
-static void SetTexParam(Tex tex, int param, int value) {
-  glBindTexture(GL_TEXTURE_2D, tex->handle);
+static void SetImgParam(Img img, int param, int value) {
+  glBindTexture(GL_TEXTURE_2D, img->handle);
   glTexParameteri(GL_TEXTURE_2D, param, value);
 }
 
-void SetTexWrapU(Tex tex, int mode) {
-  SetTexParam(tex, GL_TEXTURE_WRAP_S, ConvTexWrap(mode));
+void SetImgWrapU(Img img, int mode) {
+  SetImgParam(img, GL_TEXTURE_WRAP_S, ConvImgWrap(mode));
 }
 
-void SetTexWrapV(Tex tex, int mode) {
-  SetTexParam(tex, GL_TEXTURE_WRAP_T, ConvTexWrap(mode));
+void SetImgWrapV(Img img, int mode) {
+  SetImgParam(img, GL_TEXTURE_WRAP_T, ConvImgWrap(mode));
 }
 
-void SetTexMinFilter(Tex tex, int filter) {
-  SetTexParam(tex, GL_TEXTURE_MIN_FILTER, ConvTexFilter(filter));
+void SetImgMinFilter(Img img, int filter) {
+  SetImgParam(img, GL_TEXTURE_MIN_FILTER, ConvImgFilter(filter));
 }
 
-void SetTexMagFilter(Tex tex, int filter) {
-  SetTexParam(tex, GL_TEXTURE_MAG_FILTER, ConvTexFilter(filter));
+void SetImgMagFilter(Img img, int filter) {
+  SetImgParam(img, GL_TEXTURE_MAG_FILTER, ConvImgFilter(filter));
 }
 
-Tex Pixs(Tex tex, int width, int height, int* data) {
-  return PixsEx(tex, width, height, data, width);
+Img Pixs(Img img, int width, int height, int* data) {
+  return PixsEx(img, width, height, data, width);
 }
 
-Tex PixsEx(Tex tex, int width, int height, int* data, int stride) {
+Img PixsEx(Img img, int width, int height, int* data, int stride) {
   int* rgba = 0;
   int x, y;
   for (y = 0; y < height; ++y) {
@@ -332,12 +332,12 @@ Tex PixsEx(Tex tex, int width, int height, int* data, int stride) {
       ArrCat(&rgba, COL(data[y * stride + x]));
     }
   }
-  glBindTexture(GL_TEXTURE_2D, tex->handle);
+  glBindTexture(GL_TEXTURE_2D, img->handle);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
   RmArr(rgba);
-  tex->width = width;
-  tex->height = height;
-  return tex;
+  img->width = width;
+  img->height = height;
+  return img;
 }
 
 /* ---------------------------------------------------------------------------------------------- */

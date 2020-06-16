@@ -37,8 +37,8 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    PutMesh(mesh, 0, FtTex(ft));
-    PutMesh(mesh, ToTmpMat(trans), FtTex(ft));
+    PutMesh(mesh, 0, FtImg(ft));
+    PutMesh(mesh, ToTmpMat(trans), FtImg(ft));
     SwpBufs(wnd);
   }
 
