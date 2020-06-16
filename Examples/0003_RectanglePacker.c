@@ -2,38 +2,38 @@
 
 /* a simple best fit 2D rectangle packer. early version of what's going to be built into WeebCore */
 
-OSWindow CreateWindow() {
-  OSWindow window = osCreateWindow();
-  osSetWindowName(window, "WeebCore - Rectangle Packer Example");
-  osSetWindowClass(window, "WeebCoreRectanglePacker");
-  return window;
+Wnd MkPackerWnd() {
+  Wnd wnd = MkWnd();
+  SetWndName(wnd, "WeebCore - Rectangle Packer Example");
+  SetWndClass(wnd, "WeebCoreRectanglePacker");
+  return wnd;
 }
 
-GMesh CreateHelpText(GFont font) {
-  GMesh mesh = gCreateMesh();
-  gColor(mesh, 0xbebebe);
-  gFont(mesh, font, 10, 10,
-    "Left-click and drag to create a rectangle. Release to pack it\nF2 to reset");
+Mesh MkHelpText(Ft font) {
+  Mesh mesh = MkMesh();
+  Col(mesh, 0xbebebe);
+  FtMesh(mesh, font, 10, 10, "Left-click and drag to create a rectangle. Release to pack it\n"
+    "F2 to reset");
   return mesh;
 }
 
-GMesh CreateFullText(GFont font) {
-  GMesh mesh = gCreateMesh();
-  gColor(mesh, 0x663333);
-  gFont(mesh, font, 10, 32, "Rectangle didn't fit!");
+Mesh MkFullText(Ft font) {
+  Mesh mesh = MkMesh();
+  Col(mesh, 0x663333);
+  FtMesh(mesh, font, 10, 32, "Rectangle didn't fit!");
   return mesh;
 }
 
 typedef struct { float r[4]; } PackerRect; /* left, right, top bottom */
 
-void AddRect(PackerRect** rectsArray, float left, float right, float top, float bottom) {
-  PackerRect* newRect = wbArrayAlloc(rectsArray, 1);
-  maSetRect(newRect->r, left, right, top, bottom);
+void AddRect(PackerRect** rectsArr, float left, float right, float top, float bottom) {
+  PackerRect* newRect = ArrAlloc(rectsArr, 1);
+  SetRect(newRect->r, left, right, top, bottom);
 }
 
-void AddRectFloats(PackerRect** rectsArray, float* r) {
-  PackerRect* newRect = wbArrayAlloc(rectsArray, 1);
-  osMemCpy(newRect, r, sizeof(float) * 4);
+void AddRectFloats(PackerRect** rectsArr, float* r) {
+  PackerRect* newRect = ArrAlloc(rectsArr, 1);
+  MemCpy(newRect, r, sizeof(float) * 4);
 }
 
 /* find the best fit free rectangle (smallest area that can fit the rect).
@@ -42,10 +42,10 @@ int FindFreeRect(PackerRect* rects, PackerRect* toBePackedStruct) {
   int i, bestFit = -1;
   float bestFitArea = 2000000000;
   float* toBePacked = toBePackedStruct->r;
-  for (i = 0; i < wbArrayLen(rects); ++i) {
+  for (i = 0; i < ArrLen(rects); ++i) {
     float* rect = rects[i].r;
-    if (maRectInRectArea(toBePacked, rect)) {
-      float area = maRectWidth(rect) * maRectHeight(rect);
+    if (RectInRectArea(toBePacked, rect)) {
+      float area = RectWidth(rect) * RectHeight(rect);
       if (area < bestFitArea) {
         bestFitArea = area;
         bestFit = i;
@@ -57,14 +57,14 @@ int FindFreeRect(PackerRect* rects, PackerRect* toBePackedStruct) {
 
 /* once we have found a location for the rectangle, we need to split any free rectangles it
  * partially intersects with. this will generate two or more smaller rects */
-void SplitRects(PackerRect** rectsArray, PackerRect* toBePackedStruct) {
-  PackerRect* rects = *rectsArray;
+void SplitRects(PackerRect** rectsArr, PackerRect* toBePackedStruct) {
+  PackerRect* rects = *rectsArr;
   float* toBePacked = toBePackedStruct->r;
   int i;
   PackerRect* newRects = 0;
-  for (i = 0; i < wbArrayLen(rects); ++i) {
+  for (i = 0; i < ArrLen(rects); ++i) {
     float* r = rects[i].r;
-    if (maRectIntersect(toBePacked, r)) {
+    if (RectSect(toBePacked, r)) {
       if (toBePacked[0] > r[0]) { AddRect(&newRects, r[0], toBePacked[0], r[2], r[3]); /* left  */ }
       if (toBePacked[1] < r[1]) { AddRect(&newRects, toBePacked[1], r[1], r[2], r[3]); /* right */ }
       if (toBePacked[2] > r[2]) { AddRect(&newRects, r[0], r[1], r[2], toBePacked[2]); /* top   */ }
@@ -74,33 +74,33 @@ void SplitRects(PackerRect** rectsArray, PackerRect* toBePackedStruct) {
     }
   }
 
-  wbDestroyArray(*rectsArray);
-  *rectsArray = newRects;
+  RmArr(*rectsArr);
+  *rectsArr = newRects;
 }
 
 /* after the split step, there will be redundant rects because we create 1 rect for each side */
-void RemoveRedundantRects(PackerRect** rectsArray) {
+void RemoveRedundantRects(PackerRect** rectsArr) {
   int i, j;
-  PackerRect* rects = *rectsArray;
+  PackerRect* rects = *rectsArr;
   PackerRect* newRects = 0;
-  for (i = 0; i < wbArrayLen(rects); ++i) {
-    for (j = 0; j < wbArrayLen(rects); ++j) {
-      if (maRectInRect(rects[i].r, rects[j].r)) {
+  for (i = 0; i < ArrLen(rects); ++i) {
+    for (j = 0; j < ArrLen(rects); ++j) {
+      if (RectInRect(rects[i].r, rects[j].r)) {
         rects[i].r[0] = rects[i].r[1] = 0;
-      } else if (maRectInRect(rects[j].r, rects[i].r)) {
+      } else if (RectInRect(rects[j].r, rects[i].r)) {
         rects[j].r[0] = rects[j].r[1] = 0;
       }
     }
-    if (maRectWidth(rects[i].r) > 0) {
+    if (RectWidth(rects[i].r) > 0) {
       AddRectFloats(&newRects, rects[i].r);
     }
   }
-  wbDestroyArray(*rectsArray);
-  *rectsArray = newRects;
+  RmArr(*rectsArr);
+  *rectsArr = newRects;
 }
 
-int PackRect(PackerRect** rectsArray, PackerRect* toBePacked) {
-  PackerRect* rects = *rectsArray;
+int PackRect(PackerRect** rectsArr, PackerRect* toBePacked) {
+  PackerRect* rects = *rectsArr;
 
   int freeRect = FindFreeRect(rects, toBePacked);
   if (freeRect < 0) { /* full */
@@ -108,111 +108,112 @@ int PackRect(PackerRect** rectsArray, PackerRect* toBePacked) {
   }
 
   /* move rectangle to the top left of the free area */
-  maSetRectPos(toBePacked->r, rects[freeRect].r[0], rects[freeRect].r[2]);
+  SetRectPos(toBePacked->r, rects[freeRect].r[0], rects[freeRect].r[2]);
 
-  SplitRects(rectsArray, toBePacked);
-  RemoveRedundantRects(rectsArray);
+  SplitRects(rectsArr, toBePacked);
+  RemoveRedundantRects(rectsArr);
 
   return 1;
 }
 
-void ResetRects(PackerRect** rectsArray, OSWindow window) {
+void ClrRects(PackerRect** rectsArr, Wnd wnd) {
   /* initialize area to be one big free rect */
-  wbSetArrayLen(*rectsArray, 0);
-  AddRect(rectsArray, 0, osWindowWidth(window), 0, osWindowHeight(window));
+  SetArrLen(*rectsArr, 0);
+  AddRect(rectsArr, 0, WndWidth(wnd), 0, WndHeight(wnd));
 }
 
 int main() {
-  OSWindow window = CreateWindow();
-  GFont font = gDefaultFont();
-  GMesh help = CreateHelpText(font);
-  GMesh full = CreateFullText(font);
-  GMesh packedRects = gCreateMesh();
+  Wnd wnd = MkPackerWnd();
+  Ft font = DefFt();
+  Mesh help = MkHelpText(font);
+  Mesh full = MkFullText(font);
+  Mesh packedRects = MkMesh();
 
   PackerRect* rects = 0;
   unsigned timeElapsed = 0;
-  int color = 0;
+  int col = 0;
   int isFull = 0;
   PackerRect dragRectStruct;
   float* dragRect = dragRectStruct.r;
 
   dragRect[0] = dragRect[2] = -1;
-  ResetRects(&rects, window);
+  ClrRects(&rects, wnd);
 
   while (1) {
-    while (osNextMessage(window)) {
-      switch (osMessageType(window)) {
-        case OS_QUIT: {
-          wbDestroyArray(rects);
-          gDestroyMesh(packedRects);
-          gDestroyMesh(help);
-          gDestroyFont(font);
-          osDestroyWindow(window);
+    while (NextMsg(wnd)) {
+      switch (MsgType(wnd)) {
+        case QUIT: {
+          RmArr(rects);
+          RmMesh(packedRects);
+          RmMesh(help);
+          RmMesh(full);
+          RmFt(font);
+          RmWnd(wnd);
           return 0;
         }
-        case OS_KEYDOWN: {
-          switch (osKey(window)) {
-            case OS_MLEFT: {
-              dragRect[0] = osMouseX(window);
-              dragRect[2] = osMouseY(window);
+        case KEYDOWN: {
+          switch (Key(wnd)) {
+            case MLEFT: {
+              dragRect[0] = MouseX(wnd);
+              dragRect[2] = MouseY(wnd);
               dragRect[1] = dragRect[0];
               dragRect[3] = dragRect[2];
-              color = timeElapsed & 0x8f8f8f; /* pseudorandom color */
+              col = 0x606060 + (timeElapsed & 0x3f3f3f); /* pseudorandom col */
               break;
             }
-            case OS_F2: {
-              gDestroyMesh(packedRects);
-              packedRects = gCreateMesh();
-              ResetRects(&rects, window);
+            case F2: {
+              RmMesh(packedRects);
+              packedRects = MkMesh();
+              ClrRects(&rects, wnd);
               break;
             }
           }
           break;
         }
-        case OS_KEYUP: {
-          if (osKey(window) == OS_MLEFT) {
+        case KEYUP: {
+          if (Key(wnd) == MLEFT) {
             /* ensure the coordinates are in the right order
              * when we drag right to left / bot to top */
             PackerRect norm = dragRectStruct;
-            maNormalizeRect(norm.r);
+            NormRect(norm.r);
             isFull = !PackRect(&rects, &norm);
             if (!isFull) {
-              gColor(packedRects, color);
-              gQuad(packedRects, norm.r[0], norm.r[2], maRectWidth(norm.r), maRectHeight(norm.r));
+              Col(packedRects, col);
+              Quad(packedRects, norm.r[0], norm.r[2], RectWidth(norm.r), RectHeight(norm.r));
             }
             dragRect[0] = dragRect[2] = -1;
           }
           break;
         }
-        case OS_MOTION: {
+        case MOTION: {
           if (dragRect[0] >= 0) {
-            dragRect[1] += osMouseDX(window);
-            dragRect[3] += osMouseDY(window);
+            dragRect[1] += MouseDX(wnd);
+            dragRect[3] += MouseDY(wnd);
           }
           break;
         }
       }
     }
 
-    gDrawMesh(packedRects, 0, 0);
+    PutMesh(packedRects, 0, 0);
 
-    timeElapsed += (int)(osDeltaTime(window) * 1000000);
+    timeElapsed += (int)(Delta(wnd) * 1000000);
 
     if (dragRect[0] >= 0) {
-      GMesh mesh = gCreateMesh();
+      Mesh mesh = MkMesh();
       PackerRect norm = dragRectStruct;
-      maNormalizeRect(norm.r);
-      gColor(mesh, color);
-      gQuad(mesh, norm.r[0], norm.r[2], maRectWidth(norm.r), maRectHeight(norm.r));
-      gDrawMesh(mesh, 0, 0);
-      gDestroyMesh(mesh);
+      NormRect(norm.r);
+      Col(mesh, col);
+      Quad(mesh, norm.r[0], norm.r[2], RectWidth(norm.r), RectHeight(norm.r));
+      PutMesh(mesh, 0, 0);
+      RmMesh(mesh);
     }
 
-    gDrawMesh(help, 0, gFontTexture(font));
+    PutMesh(help, 0, FtTex(font));
     if (isFull) {
-      gDrawMesh(full, 0, gFontTexture(font));
+      PutMesh(full, 0, FtTex(font));
     }
-    gSwapBuffers(window);
+    SwpBufs(wnd);
   }
 
   return 0;

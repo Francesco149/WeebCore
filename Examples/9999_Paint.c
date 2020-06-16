@@ -1,26 +1,26 @@
-/* very early draft of the sprite editor
+/* very early draft of the sprite ed
  * middle click drag to pan
  * left click drag to draw
  * mouse wheel to zoom
  *
- * to avoid updating the texture for every new pixel, the pixels are batched up and temporarily
- * rendered as individual quads until they are flushed to the real texture */
+ * to avoid updating the tex for every new pix, the pixs are batched up and temporarily
+ * rendered as individual quads until they are flushed to the real tex */
 
 #include "WeebCore.c"
 
-GTexture CreateCheckerTexture() {
-  GTexture texture;
+Tex MkCheckerTex() {
+  Tex tex;
   int data[4] = { 0xaaaaaa, 0x666666, 0x666666, 0xaaaaaa };
-  texture = gCreateTexture();
-  gPixels(texture, 2, 2, data);
-  return texture;
+  tex = MkTex();
+  Pixs(tex, 2, 2, data);
+  return tex;
 }
 
-int* CreatePixels(int fillColor, int width, int height) {
+int* MkPixs(int fillCol, int width, int height) {
   int i;
   int* data = 0;
   for (i = 0; i < width * height; ++i) {
-    wbArrayAppend(&data, fillColor);
+    ArrCat(&data, fillCol);
   }
   return data;
 }
@@ -32,230 +32,230 @@ int* CreatePixels(int fillColor, int width, int height) {
 #define DRAWING (1<<2)
 #define DIRTY (1<<3)
 
-typedef struct _EDUpdate {
+typedef struct _EDUpd {
   int color;
   int x, y;
-} EDUpdate;
+} EDUpd;
 
 typedef struct _Editor {
-  OSWindow window;
+  Wnd window;
   int flags;
   float oX, oY;
   float flushTimer;
   int scale;
   int color;
-  GMesh backgroundMesh;
-  GTexture checkerTexture;
-  GMesh mesh;
-  GTexture texture;
-  int* textureData;
-  EDUpdate* updates;
-  GTransformBuilder transformBuilder;
-  GTransform transform, transformOrtho, backgroundTransform;
+  Mesh bgMesh;
+  Tex checkerTex;
+  Mesh mesh;
+  Tex tex;
+  int* texData;
+  EDUpd* updates;
+  Trans trans;
+  Mat mat, matOrtho, bgMat;
 }* Editor;
 
-OSWindow edCreateWindow() {
-  OSWindow window = osCreateWindow();
-  osSetWindowClass(window, "HelloWindow");
-  osSetWindowName(window, "Hello WeebCore");
+Wnd EdMkWnd() {
+  Wnd window = MkWnd();
+  SetWndClass(window, "HelloWnd");
+  SetWndName(window, "Hello WeebCore");
   return window;
 }
 
-void edFlushUpdates(Editor editor) {
-  gPixels(editor->texture, TEXSIZE, TEXSIZE, editor->textureData);
-  wbSetArrayLen(editor->updates, 0);
-  editor->flags &= ~DIRTY;
+void EdFlushUpds(Editor ed) {
+  Pixs(ed->tex, TEXSIZE, TEXSIZE, ed->texData);
+  SetArrLen(ed->updates, 0);
+  ed->flags &= ~DIRTY;
 }
 
-void edUpdateBackgroundMesh(Editor editor) {
-  gDestroyMesh(editor->backgroundMesh);
-  editor->backgroundMesh = gCreateMesh();
-  gQuad(editor->backgroundMesh, 0, 0,
-    maCeil(osWindowWidth(editor->window)  / (float)CHECKER_SIZE),
-    maCeil(osWindowHeight(editor->window) / (float)CHECKER_SIZE)
+void EdUpdBMesh(Editor ed) {
+  RmMesh(ed->bgMesh);
+  ed->bgMesh = MkMesh();
+  Quad(ed->bgMesh, 0, 0,
+    Ceil(WndWidth(ed->window)  / (float)CHECKER_SIZE),
+    Ceil(WndHeight(ed->window) / (float)CHECKER_SIZE)
   );
 }
 
-GTransform edCreateBackgroundTransform() {
-  GTransform transform = gCreateTransform();
-  gScale1(transform, CHECKER_SIZE);
-  return transform;
+Mat EdMkBgMat() {
+  Mat mat = MkMat();
+  Scale1(mat, CHECKER_SIZE);
+  return mat;
 }
 
-void edMapToTexture(Editor editor, float* point) {
-  /* un-transform mouse coordinates so they are relative to the texture */
-  gInverseTransformPoint(editor->transformOrtho, point);
-  point[0] /= editor->scale;
-  point[1] /= editor->scale;
+void EdMapToTex(Editor ed, float* point) {
+  /* un-trans mouse coordinates so they are relative to the tex */
+  InvTransPt(ed->matOrtho, point);
+  point[0] /= ed->scale;
+  point[1] /= ed->scale;
 }
 
-void edUpdateTransform(Editor editor) {
-  GTransformBuilder tbuilder = editor->transformBuilder;
-  gResetTransform(tbuilder);
-  gSetPosition(tbuilder, editor->oX, editor->oY);
-  gSetScale1(tbuilder, editor->scale);
-  editor->transform = gBuildTempTransform(tbuilder);
-  editor->transformOrtho = gBuildTempTransformOrtho(tbuilder);
+void EdUpdTrans(Editor ed) {
+  Trans trans = ed->trans;
+  ClrTrans(trans);
+  SetPos(trans, ed->oX, ed->oY);
+  SetScale1(trans, ed->scale);
+  ed->mat = ToTmpMat(trans);
+  ed->matOrtho = ToTmpMatOrtho(trans);
 }
 
-Editor edCreate() {
-  Editor editor = osAlloc(sizeof(struct _Editor));
-  editor->scale = 4;
-  editor->oX = 100;
-  editor->oY = 100;
-  editor->window = edCreateWindow();
-  editor->checkerTexture = CreateCheckerTexture();
-  editor->texture = gCreateTexture();
-  editor->textureData = CreatePixels(0xffffff, TEXSIZE, TEXSIZE);
-  editor->transformBuilder = gCreateTransformBuilder();
-  editor->backgroundTransform = edCreateBackgroundTransform();
+Editor EdMk() {
+  Editor ed = Alloc(sizeof(struct _Editor));
+  ed->scale = 4;
+  ed->oX = 100;
+  ed->oY = 100;
+  ed->window = EdMkWnd();
+  ed->checkerTex = MkCheckerTex();
+  ed->tex = MkTex();
+  ed->texData = MkPixs(0xffffff, TEXSIZE, TEXSIZE);
+  ed->trans = MkTrans();
+  ed->bgMat = EdMkBgMat();
 
-  editor->mesh = gCreateMesh();
-  gQuad(editor->mesh, 0, 0, TEXSIZE, TEXSIZE);
+  ed->mesh = MkMesh();
+  Quad(ed->mesh, 0, 0, TEXSIZE, TEXSIZE);
 
-  edFlushUpdates(editor);
-  edUpdateBackgroundMesh(editor);
-  edUpdateTransform(editor);
+  EdFlushUpds(ed);
+  EdUpdBMesh(ed);
+  EdUpdTrans(ed);
 
-  return editor;
+  return ed;
 }
 
-void edDestroy(Editor editor) {
-  if (editor) {
-    osDestroyWindow(editor->window);
-    gDestroyMesh(editor->mesh);
-    gDestroyMesh(editor->backgroundMesh);
-    wbDestroyArray(editor->textureData);
-    wbDestroyArray(editor->updates);
-    gDestroyTexture(editor->texture);
-    gDestroyTexture(editor->checkerTexture);
-    gDestroyTransformBuilder(editor->transformBuilder);
-    gDestroyTransform(editor->backgroundTransform);
+void EdRm(Editor ed) {
+  if (ed) {
+    RmWnd(ed->window);
+    RmMesh(ed->mesh);
+    RmMesh(ed->bgMesh);
+    RmArr(ed->texData);
+    RmArr(ed->updates);
+    RmTex(ed->tex);
+    RmTex(ed->checkerTex);
+    RmTrans(ed->trans);
+    RmMat(ed->bgMat);
   }
-  osFree(editor);
+  Free(ed);
 }
 
-void edDrawPixel(Editor editor) {
+void EdPutPix(Editor ed) {
   int x, y;
   float point[2];
-  point[0] = osMouseX(editor->window);
-  point[1] = osMouseY(editor->window);
-  edMapToTexture(editor, point);
+  point[0] = MouseX(ed->window);
+  point[1] = MouseY(ed->window);
+  EdMapToTex(ed, point);
   x = (int)point[0];
   y = (int)point[1];
   if (x >= 0 && x < TEXSIZE && y >= 0 && y < TEXSIZE) {
-    int* px = &editor->textureData[y * TEXSIZE + x];
-    if (*px != editor->color) {
-      EDUpdate* u;
-      *px = editor->color;
-      u = wbArrayAlloc(&editor->updates, 1);
+    int* px = &ed->texData[y * TEXSIZE + x];
+    if (*px != ed->color) {
+      EDUpd* u;
+      *px = ed->color;
+      u = ArrAlloc(&ed->updates, 1);
       u->x = x;
       u->y = y;
-      u->color = editor->color;
-      editor->flags |= DIRTY;
+      u->color = ed->color;
+      ed->flags |= DIRTY;
     }
   }
 }
 
-void edChangeScale(Editor editor, int direction) {
+void EdChangeScale(Editor ed, int direction) {
   float p[2];
-  float newScale = editor->scale + direction * (editor->scale / 8 + 1);
-  newScale = wbMin(32, newScale);
-  newScale = wbMax(1, newScale);
-  p[0] = osMouseX(editor->window);
-  p[1] = osMouseY(editor->window);
-  edMapToTexture(editor, p);
-  /* adjust panning so the pixel we're pointing stays under the cursor */
-  editor->oX -= (int)((p[0] * newScale) - (p[0] * editor->scale) + 0.5f);
-  editor->oY -= (int)((p[1] * newScale) - (p[1] * editor->scale) + 0.5f);
-  editor->scale = newScale;
-  edUpdateTransform(editor);
+  float newScale = ed->scale + direction * (ed->scale / 8 + 1);
+  newScale = Min(32, newScale);
+  newScale = Max(1, newScale);
+  p[0] = MouseX(ed->window);
+  p[1] = MouseY(ed->window);
+  EdMapToTex(ed, p);
+  /* adjust panning so the pix we're pointing stays under the cursor */
+  ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale) + 0.5f);
+  ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale) + 0.5f);
+  ed->scale = newScale;
+  EdUpdTrans(ed);
 }
 
-void edHandleKeyDown(Editor editor, int key) {
+void EdHandleKeyDown(Editor ed, int key) {
   switch (key) {
-    case OS_MMID: { editor->flags |= DRAGGING; break; }
-    case OS_MWHEELUP: { edChangeScale(editor, 1); break; }
-    case OS_MWHEELDOWN: { edChangeScale(editor, -1); break; }
-    case OS_MLEFT: {
-      editor->flags |= DRAWING;
-      edDrawPixel(editor);
-      edFlushUpdates(editor);
+    case MMID: { ed->flags |= DRAGGING; break; }
+    case MWHEELUP: { EdChangeScale(ed, 1); break; }
+    case MWHEELDOWN: { EdChangeScale(ed, -1); break; }
+    case MLEFT: {
+      ed->flags |= DRAWING;
+      EdPutPix(ed);
+      EdFlushUpds(ed);
       break;
     }
   }
 }
 
-void edHandleKeyUp(Editor editor, int key) {
+void EdHandleKeyUp(Editor ed, int key) {
   switch (key) {
-    case OS_MMID: { editor->flags &= ~DRAGGING; break; }
-    case OS_MLEFT: { editor->flags &= ~DRAWING; break; }
+    case MMID: { ed->flags &= ~DRAGGING; break; }
+    case MLEFT: { ed->flags &= ~DRAWING; break; }
   }
 }
 
-int edHandleMessage(Editor editor) {
-  OSWindow window = editor->window;
-  switch (osMessageType(window)) {
-    case OS_SIZE: { edUpdateBackgroundMesh(editor); break; }
-    case OS_KEYDOWN: { edHandleKeyDown(editor, osKey(window)); break; }
-    case OS_KEYUP: { edHandleKeyUp(editor, osKey(window)); break; }
-    case OS_MOTION: {
-      int flags = editor->flags;
+int EdHandleMsg(Editor ed) {
+  Wnd window = ed->window;
+  switch (MsgType(window)) {
+    case SIZE: { EdUpdBMesh(ed); break; }
+    case KEYDOWN: { EdHandleKeyDown(ed, Key(window)); break; }
+    case KEYUP: { EdHandleKeyUp(ed, Key(window)); break; }
+    case MOTION: {
+      int flags = ed->flags;
       if (flags & DRAGGING) {
-        editor->oX += osMouseDX(window);
-        editor->oY += osMouseDY(window);
-        edUpdateTransform(editor);
+        ed->oX += MouseDX(window);
+        ed->oY += MouseDY(window);
+        EdUpdTrans(ed);
       }
       if (flags & DRAWING) {
-        edDrawPixel(editor);
+        EdPutPix(ed);
       }
       break;
     }
-    case OS_QUIT: { return 0; }
+    case QUIT: { return 0; }
   }
   return 1;
 }
 
-void edUpdate(Editor editor) {
-  OSWindow window = editor->window;
-  editor->flushTimer += osDeltaTime(window);
-  if ((editor->flags & DIRTY) && editor->flushTimer > 1.0f) {
-    edFlushUpdates(editor);
-    editor->flushTimer -= 1.0f;
+void EdUpd(Editor ed) {
+  Wnd window = ed->window;
+  ed->flushTimer += Delta(window);
+  if ((ed->flags & DIRTY) && ed->flushTimer > 1.0f) {
+    EdFlushUpds(ed);
+    ed->flushTimer -= 1.0f;
   }
 }
 
-void edDrawUpdates(Editor editor) {
+void EdPutUpds(Editor ed) {
   int i;
-  GMesh mesh = gCreateMesh();
-  EDUpdate* updates = editor->updates;
-  for (i = 0; i < wbArrayLen(updates); ++i) {
-    EDUpdate* u = &updates[i];
-    gColor(mesh, u->color);
-    gQuad(mesh, u->x, u->y, 1, 1);
+  Mesh mesh = MkMesh();
+  EDUpd* updates = ed->updates;
+  for (i = 0; i < ArrLen(updates); ++i) {
+    EDUpd* u = &updates[i];
+    Col(mesh, u->color);
+    Quad(mesh, u->x, u->y, 1, 1);
   }
-  gDrawMesh(mesh, editor->transform, 0);
-  gDestroyMesh(mesh);
+  PutMesh(mesh, ed->mat, 0);
+  RmMesh(mesh);
 }
 
-void edDraw(Editor editor) {
-  gDrawMesh(editor->backgroundMesh, editor->backgroundTransform, editor->checkerTexture);
-  gDrawMesh(editor->mesh, editor->transform, editor->texture);
-  edDrawUpdates(editor);
-  gSwapBuffers(editor->window);
+void EdPut(Editor ed) {
+  PutMesh(ed->bgMesh, ed->bgMat, ed->checkerTex);
+  PutMesh(ed->mesh, ed->mat, ed->tex);
+  EdPutUpds(ed);
+  SwpBufs(ed->window);
 }
 
 int main() {
-  Editor editor = edCreate();
+  Editor ed = EdMk();
   while (1) {
-    while (osNextMessage(editor->window)) {
-      if (!edHandleMessage(editor)) {
-        edDestroy(editor);
+    while (NextMsg(ed->window)) {
+      if (!EdHandleMsg(ed)) {
+        EdRm(ed);
         return 0;
       }
     }
-    edUpdate(editor);
-    edDraw(editor);
+    EdUpd(ed);
+    EdPut(ed);
   }
   return 0;
 }

@@ -2,21 +2,20 @@
 #include <math.h>
 
 int main() {
-  OSWindow window = osCreateWindow();
-  osSetWindowClass(window, "HelloWindow");
-  osSetWindowName(window, "Hello WeebCore");
+  Wnd wnd = MkWnd();
+  SetWndClass(wnd, "HelloWnd");
+  SetWndName(wnd, "Hello WeebCore");
   while (1) {
-    while (osNextMessage(window)) {
-      switch (osMessageType(window)) {
-        case OS_QUIT: {
-          osDestroyWindow(window);
+    while (NextMsg(wnd)) {
+      switch (MsgType(wnd)) {
+        case QUIT: {
+          RmWnd(wnd);
           return 0;
         }
       }
     }
-    gSwapBuffers(window);
+    SwpBufs(wnd);
   }
-
   return 0;
 }
 

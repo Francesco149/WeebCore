@@ -1,39 +1,39 @@
 #include "WeebCore.c"
 
 int main() {
-  float rotate = 0;
-  GMesh mesh;
-  GTransformBuilder transform = gCreateTransformBuilder();
-  OSWindow window = osCreateWindow();
-  osSetWindowClass(window, "HelloWindow");
-  osSetWindowName(window, "Hello WeebCore");
+  float rot = 0;
+  Mesh mesh;
+  Trans trans = MkTrans();
+  Wnd wnd = MkWnd();
+  SetWndClass(wnd, "HelloWnd");
+  SetWndName(wnd, "Hello WeebCore");
 
-  mesh = gCreateMesh();
-  gColor(mesh, 0xffffff);
-  gQuad(mesh, -100, -50, 200, 100);
-  gColor(mesh, 0xb26633);
-  gQuad(mesh, -90, -40, 180, 80);
+  mesh = MkMesh();
+  Col(mesh, 0xffffff);
+  Quad(mesh, -100, -50, 200, 100);
+  Col(mesh, 0xb26633);
+  Quad(mesh, -90, -40, 180, 80);
 
   while (1) {
-    while (osNextMessage(window)) {
-      switch (osMessageType(window)) {
-        case OS_QUIT: {
-          osDestroyWindow(window);
-          gDestroyMesh(mesh);
-          gDestroyTransformBuilder(transform);
+    while (NextMsg(wnd)) {
+      switch (MsgType(wnd)) {
+        case QUIT: {
+          RmWnd(wnd);
+          RmMesh(mesh);
+          RmTrans(trans);
           return 0;
         }
       }
     }
 
     /* just a random time based animation */
-    rotate = maFloatMod(rotate + osDeltaTime(window) * 360, 360*2);
-    gSetRotation(transform, rotate);
-    gSetPosition(transform, 320 + (int)(200 * maSin(rotate / 2)), 240);
-    gSetScale1(transform, 0.25f + (1 + maSin(rotate)) / 3);
+    rot = FltMod(rot + Delta(wnd) * 360, 360*2);
+    SetRot(trans, rot);
+    SetPos(trans, 320 + (int)(200 * Sin(rot / 2)), 240);
+    SetScale1(trans, 0.25f + (1 + Sin(rot)) / 3);
 
-    gDrawMesh(mesh, gBuildTempTransform(transform), 0);
-    gSwapBuffers(window);
+    PutMesh(mesh, ToTmpMat(trans), 0);
+    SwpBufs(wnd);
   }
 
   return 0;

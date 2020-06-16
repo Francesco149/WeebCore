@@ -22,6 +22,9 @@ all of the code and assets are public domain unless stated otherwise
 * I want it to have its own tools and ecosystem to give it a bit more personality. for example I'm
   currently bootstrapping fonts and ui with a basic sprite editor I wrote and saving sprites to a
   custom wbspr format I've made. it should bootstrap itself, because it's fun.
+* use short but easy to type names. disregard any potential for name clashes with other libraries
+  as the focus is on minimal dependencies
+* don't be afraid to break api if that means nicer/less code
 
 # portability
 at the moment the platform assumptions in the core logic are

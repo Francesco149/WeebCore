@@ -9,56 +9,56 @@
 /* ---------------------------------------------------------------------------------------------- */
 
 /* opaque handles */
-typedef struct _OSWindow* OSWindow;
-typedef struct _OSMessage* OSMessage;
-typedef struct _OSClock* OSClock;
+typedef struct _Wnd* Wnd;
+typedef struct _Msg* Msg;
+typedef struct _Clk* Clk;
 
-OSWindow osCreateWindow();
-void osDestroyWindow(OSWindow window);
-void osSetWindowName(OSWindow window, char* windowName);
-void osSetWindowClass(OSWindow window, char* className);
-void osSetWindowSize(OSWindow window, int width, int height);
-int osWindowWidth(OSWindow window);
-int osWindowHeight(OSWindow window);
+Wnd MkWnd();
+void RmWnd(Wnd wnd);
+void SetWndName(Wnd wnd, char* wndName);
+void SetWndClass(Wnd wnd, char* className);
+void SetWndSize(Wnd wnd, int width, int height);
+int WndWidth(Wnd wnd);
+int WndHeight(Wnd wnd);
 
-/* get time elapsed in seconds since the last osSwapBuffers. guaranteed to return non-zero even if
- * no osSwapBuffers happened */
-float osDeltaTime(OSWindow window);
+/* get time elapsed in seconds since the last SwpBufs. guaranteed to return non-zero even if
+ * no SwpBufs happened */
+float Delta(Wnd wnd);
 
-/* FPS limiter, 0 for unlimited. limiting happens in gSwapBuffers. note that unlimited fps still
- * waits for the minimum timer resolution for osGetTime */
-void osSetWindowFPS(OSWindow window, int fps);
+/* FPS limiter, 0 for unlimited. limiting happens in SwpBufs. note that unlimited fps still
+ * waits for the minimum timer resolution for GetTime */
+void SetWndFPS(Wnd wnd, int fps);
 
 /* fetch one message. returns non-zero as long as there are more */
-int osNextMessage(OSWindow window);
+int NextMsg(Wnd wnd);
 
-/* sends OS_QUIT message to the window */
-void osPostQuitMessage(OSWindow window);
+/* sends QUIT message to the wnd */
+void PostQuitMsg(Wnd wnd);
 
-/* these funcs get data from the last message fetched by osNextMessage */
-int osMessageType(OSWindow window);
-int osKey(OSWindow window);
-int osKeyState(OSWindow window);
-int osMouseX(OSWindow window);
-int osMouseY(OSWindow window);
-int osMouseDX(OSWindow window);
-int osMouseDY(OSWindow window);
+/* these funcs get data from the last message fetched by NextMsg */
+int MsgType(Wnd wnd);
+int Key(Wnd wnd);
+int KeyState(Wnd wnd);
+int MouseX(Wnd wnd);
+int MouseY(Wnd wnd);
+int MouseDX(Wnd wnd);
+int MouseDY(Wnd wnd);
 
 /* allocates n bytes and initializes memory to zero */
-void* osAlloc(int n);
+void* Alloc(int n);
 
 /* reallocate p to new size n. memory that wasn't initialized is not guaranteed to be zero */
-void* osRealloc(void* p, int n);
+void* Realloc(void* p, int n);
 
-void osFree(void* p);
-void osMemSet(void* p, unsigned char val, int n);
-void osMemCpy(void* dst, void* src, int n);
+void Free(void* p);
+void MemSet(void* p, unsigned char val, int n);
+void MemCpy(void* dst, void* src, int n);
 
 /* write data to disk. returns number of bytes written or < 0 for errors */
-int osWriteEntireFile(char* path, void* data, int dataLen);
+int WriteFile(char* path, void* data, int dataLen);
 
 /* read up to maxSize bytes from disk */
-int osReadEntireFile(char* path, void* data, int maxSize);
+int ReadFile(char* path, void* data, int maxSize);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                           RENDERER                                             */
@@ -68,89 +68,89 @@ int osReadEntireFile(char* path, void* data, int maxSize);
 /* ---------------------------------------------------------------------------------------------- */
 
 /* opaque handles */
-typedef struct _GMesh* GMesh;
-typedef struct _GTexture* GTexture;
-typedef struct _GTransform* GTransform;
-typedef struct _GTransformBuilder* GTransformBuilder;
+typedef struct _Mesh* Mesh;
+typedef struct _Tex* Tex;
+typedef struct _Mat* Mat;
+typedef struct _Trans* Trans;
 
 /* ---------------------------------------------------------------------------------------------- */
 
-/* GMesh is a collection of vertices that will be rendered using the same texture and transform. try
+/* Mesh is a collection of vertices that will be rendered using the same tex and trans. try
  * to batch up as much stuff into a mesh as possible for optimal performance. */
 
-GMesh gCreateMesh();
-void gDestroyMesh(GMesh mesh);
+Mesh MkMesh();
+void RmMesh(Mesh mesh);
 
-/* change current color. color is ARGB 32-bit int (0xAARRGGBB). 255 alpha = completely transparent,
+/* change current color. color is Argb 32-bit int (0xAARRGGBB). 255 alpha = completely transparent,
  * 0 alpha = completely opaque */
-void gColor(GMesh mesh, int color);
+void Col(Mesh mesh, int color);
 
 /* these are for custom meshes.
- * wrap gVertex and gFace calls between gBegin and gEnd.
- * indices start at zero and we are indexing the vertices submitted between gBegin and gEnd. see the
- * implementations of gQuad and gTriangle for examples */
-void gBegin(GMesh mesh);
-void gEnd(GMesh mesh);
-void gVertex(GMesh mesh, float x, float y);
-void gTexCoord(GMesh mesh, float u, float v);
-void gFace(GMesh mesh, int i1, int i2, int i3);
+ * wrap Vert and Face calls between Begin and End.
+ * indices start at zero and we are indexing the vertices submitted between Begin and End. see the
+ * implementations of Quad and Tri for examples */
+void Begin(Mesh mesh);
+void End(Mesh mesh);
+void Vert(Mesh mesh, float x, float y);
+void TexCoord(Mesh mesh, float u, float v);
+void Face(Mesh mesh, int i1, int i2, int i3);
+void PutMesh(Mesh mesh, Mat mat, Tex tex);
 
 /* ---------------------------------------------------------------------------------------------- */
 
-/* OpenGL-like post-multiplied transform. matrix memory layout is row major */
+/* OpenGL-like post-multiplied trans. mat memory layout is row major */
 
-GTransform gCreateTransform();
-void gDestroyTransform(GTransform transform);
-void gDrawMesh(GMesh mesh, GTransform transform, GTexture texture);
-GTransform gCloneTransform(GTransform source);
-void gLoadIdentity(GTransform transform);
-void gLoadMatrix(GTransform transform, float* matrixIn);
-void gGetMatrix(GTransform transform, float* matrixOut);
-void gScale(GTransform transform, float x, float y);
-void gScale1(GTransform transform, float scale);
-void gTranslate(GTransform transform, float x, float y);
-void gRotate(GTransform transform, float degrees);
-void gMultiplyTransform(GTransform transform, GTransform other);
-void gMultiplyMatrix(GTransform transform, float* matrixIn);
+Mat MkMat();
+void RmMat(Mat mat);
+Mat DupMat(Mat source);
+void SetIdentity(Mat mat);
+void SetMat(Mat mat, float* matIn);
+void GetMat(Mat mat, float* matOut);
+void Scale(Mat mat, float x, float y);
+void Scale1(Mat mat, float scale);
+void Move(Mat mat, float x, float y);
+void Rot(Mat mat, float deg);
+void MulMat(Mat mat, Mat other);
+void MulMatFlt(Mat mat, float* matIn);
 
 /* ---------------------------------------------------------------------------------------------- */
 
-GTexture gCreateTexture();
-void gDestroyTexture(GTexture texture);
+Tex MkTex();
+void RmTex(Tex tex);
 
-/* set wrap mode for texture coordinates. default is G_REPEAT */
-void gSetTextureWrapU(GTexture texture, int mode);
-void gSetTextureWrapV(GTexture texture, int mode);
+/* set wrap mode for tex coordinates. default is REPEAT */
+void SetTexWrapU(Tex tex, int mode);
+void SetTexWrapV(Tex tex, int mode);
 
-/* set min/mag filter for texture. default is G_NEAREST */
-void gSetTextureMinFilter(GTexture texture, int filter);
-void gSetTextureMagFilter(GTexture texture, int filter);
+/* set min/mag filter for tex. default is NEAREST */
+void SetTexMinFilter(Tex tex, int filter);
+void SetTexMagFilter(Tex tex, int filter);
 
-/* set the texture's pixel data. must be an array of 0xAARRGGBB colors as explained in gColor.
- * pixels are laid out row major - for example a 4x4 image would be:
+/* set the tex's pix data. must be an array of 0xAARRGGBB colors as explained in Col.
+ * pixs are laid out row major - for example a 4x4 image would be:
  * { px00, px10, px01, px11 }
- * note that this is usually an expensive call. only update the texture data when it's actually
+ * note that this is usually an expensive call. only update the tex data when it's actually
  * changing */
-void gPixels(GTexture texture, int width, int height, int* data);
+void Pixs(Tex tex, int width, int height, int* data);
 
-/* same as gPixels but you can specify stride which is how many bytes are between the beginning
+/* same as Pixs but you can specify stride which is how many bytes are between the beginning
  * of each row, for cases when you have extra padding or when you're submitting a sub-region of a
  * bigger image */
-void gPixelsEx(GTexture texture, int width, int height, int* data, int stride);
+void PixsEx(Tex tex, int width, int height, int* data, int stride);
 
 /* ---------------------------------------------------------------------------------------------- */
 
 /* flush all rendered geometry to the screen */
-void gSwapBuffers(OSWindow window);
+void SwpBufs(Wnd wnd);
 
-/* set rendering rectangle from the top left of the window, in pixels. this is automatically called
- * when the window is resized. it can also be called manually to render to a subregion of the
- * window. all coordinates passed to other rendering functions start from the top left corner of
+/* set rendering rectangle from the top left of the wnd, in pixs. this is automatically called
+ * when the wnd is resized. it can also be called manually to render to a subregion of the
+ * wnd. all coordinates passed to other rendering functions start from the top left corner of
  * this rectangle. */
-void gViewport(OSWindow window, int x, int y, int width, int height);
+void Viewport(Wnd wnd, int x, int y, int width, int height);
 
 /* the initial color of a blank frame */
-void gClearColor(int color);
+void ClsCol(int color);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                         MATH FUNCTIONS                                         */
@@ -159,73 +159,73 @@ void gClearColor(int color);
 /* your own by defining these funcs                                                               */
 /* ---------------------------------------------------------------------------------------------- */
 
-float maFloatMod(float x, float y); /* returns x modulo y */
-float maSin(float degrees);
-float maCos(float degrees);
-int maCeil(float x);
-int maFloor(float x);
-float maSqrt(float x);
+float FltMod(float x, float y); /* returns x modulo y */
+float Sin(float deg);
+float Cos(float deg);
+int Ceil(float x);
+int Floor(float x);
+float Sqrt(float x);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                    BUILT-IN MATH FUNCTIONS                                     */
 /* ---------------------------------------------------------------------------------------------- */
 
-float maLerp(float a, float b, float amount);
-void maLerpFloats(int n, float* a, float* b, float* result, float amount);
-void maMulFloatsScalar(int n, float* floats, float* result, float scalar);
-void maFloorFloats(int n, float* floats, float* result);
-void maClampFloats(int n, float* floats, float* result, float min, float max);
-void maAddFloats(int n, float* a, float* b, float* result);
+float Lerp(float a, float b, float amount);
+void LerpFlts(int n, float* a, float* b, float* result, float amount);
+void MulFltsScalar(int n, float* floats, float* result, float scalar);
+void FloorFlts(int n, float* floats, float* result);
+void ClampFlts(int n, float* floats, float* result, float min, float max);
+void AddFlts(int n, float* a, float* b, float* result);
 
 /* these funcs operate on a rectangle represented as an array of 4 floats (left, top, right, bot) */
-void maSetRect(float* rect, float left, float right, float top, float bottom);
-void maSetRectPos(float* rect, float x, float y);
-void maSetRectSize(float* rect, float width, float height);
-void maSetRectLeft(float* rect, float left);
-void maSetRectRight(float* rect, float right);
-void maSetRectTop(float* rect, float top);
-void maSetRectBottom(float* rect, float bottom);
-void maNormalizeRect(float* rect); /* swaps values around so width/height aren't negative */
-void maClampRect(float* rect, float* other); /* clamp rect to be inside of other rect */
-float maRectWidth(float* rect);
-float maRectHeight(float* rect);
-float maRectX(float* rect);
-float maRectY(float* rect);
-float maRectLeft(float* rect);
-float maRectRight(float* rect);
-float maRectTop(float* rect);
-float maRectBottom(float* rect);
-int maPtInRect(float* rect, float x, float y); /* check if xy lies in rect. must be normalized. */
-int maRectIntersect(float* a, float* b);
+void SetRect(float* rect, float left, float right, float top, float bot);
+void SetRectPos(float* rect, float x, float y);
+void SetRectSize(float* rect, float width, float height);
+void SetRectLeft(float* rect, float left);
+void SetRectRight(float* rect, float right);
+void SetRectTop(float* rect, float top);
+void SetRectBot(float* rect, float bot);
+void NormRect(float* rect); /* swaps values around so width/height aren't negative */
+void ClampRect(float* rect, float* other); /* clamp rect to be inside of other rect */
+float RectWidth(float* rect);
+float RectHeight(float* rect);
+float RectX(float* rect);
+float RectY(float* rect);
+float RectLeft(float* rect);
+float RectRight(float* rect);
+float RectTop(float* rect);
+float RectBot(float* rect);
+int PtInRect(float* rect, float x, float y); /* check if xy lies in rect. must be normalized. */
+int RectSect(float* a, float* b);
 
 /* check that needle is entirely inside of haystack */
-int maRectInRect(float* needle, float* haystack);
+int RectInRect(float* needle, float* haystack);
 
 /* check that needle's area can entirely fit inside of haystack (ignores position) */
-int maRectInRectArea(float* needle, float* haystack);
+int RectInRectArea(float* needle, float* haystack);
 
 /* ---------------------------------------------------------------------------------------------- */
-/*                                          WBSPR FORMAT                                          */
+/*                                          SPR FORMAT                                          */
 /* this is meant as simple RLE compression for 2D spriteswith a limited color palette             */
 /* ---------------------------------------------------------------------------------------------- */
 
-typedef struct _WBSpr* WBSpr;
+typedef struct _Spr* Spr;
 
-WBSpr wbCreateSpr(char* data, int length);
-WBSpr wbCreateSprFromArray(char* data);
-WBSpr wbCreateSprFromFile(char* filePath);
-void wbDestroySpr(WBSpr spr);
-int wbSprWidth(WBSpr spr);
-int wbSprHeight(WBSpr spr);
-void wbSprToARGB(WBSpr spr, int* argb);
-int* wbSprToARGBArray(WBSpr spr);
+Spr MkSpr(char* data, int length);
+Spr MkSprFromArr(char* data);
+Spr MkSprFromFile(char* filePath);
+void RmSpr(Spr spr);
+int SprWidth(Spr spr);
+int SprHeight(Spr spr);
+void SprToArgb(Spr spr, int* argb);
+int* SprToArgbArr(Spr spr);
 
-/* returns a resizable array that must be freed with wbDestroyArray */
-char* wbARGBToSprArray(int* argb, int width, int height);
+/* returns a resizable array that must be freed with RmArr */
+char* ArgbToSprArr(int* argb, int width, int height);
 
 /* Format Details:
  *
- * char[4] "WBSP"
+ * char[4] "SP"
  * varint formatVersion
  * varint width, height
  * varint paletteLength
@@ -237,55 +237,54 @@ char* wbARGBToSprArray(int* argb, int width, int height);
  * }
  * ...
  *
- * varint's are protobuf style encoded integers. see wbEncodeVarInt32 */
+ * varint's are protobuf style encoded integers. see EncVarI32 */
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                          RENDER UTILS                                          */
 /* ---------------------------------------------------------------------------------------------- */
 
-/* create a transform from scale, position, origin, rotation applied in a fixed order */
+/* create a trans from scale, position, origin, rot applied in a fixed order */
 
-GTransformBuilder gCreateTransformBuilder();
-void gDestroyTransformBuilder(GTransformBuilder builder);
-void gResetTransform(GTransformBuilder builder);
-void gSetScale(GTransformBuilder builder, float x, float y);
-void gSetScale1(GTransformBuilder builder, float scale);
-void gSetPosition(GTransformBuilder builder, float x, float y);
-void gSetOrigin(GTransformBuilder builder, float x, float y);
-void gSetRotation(GTransformBuilder builder, float degrees);
-GTransform gBuildTransform(GTransformBuilder build);
+Trans MkTrans();
+void RmTrans(Trans trans);
+void ClrTrans(Trans trans);
+void SetScale(Trans trans, float x, float y);
+void SetScale1(Trans trans, float scale);
+void SetPos(Trans trans, float x, float y);
+void SetOrig(Trans trans, float x, float y);
+void SetRot(Trans trans, float deg);
+Mat ToMat(Trans trans);
 
-/* the ortho version of gBuild* functions produce a matrix that is orthogonal (doesn't apply scale
+/* the ortho version of To* functions produce a mat that is orthogonal (doesn't apply scale
  * among other things) this is useful for trivial inversion */
-GTransform gBuildTransformOrtho(GTransformBuilder build);
+Mat ToMatOrtho(Trans trans);
 
-/* the transform returned by this does not need to be destroyed. it will be automatically destroyed
- * when gDestroyTransformBuilder is called.
+/* the trans returned by this does not need to be destroyed. it will be automatically destroyed
+ * when RmTrans is called.
  *
- * note that subsequent calls to this function will invalidate the previously generated transform.
+ * note that subsequent calls to this function will invalidate the previously generated trans.
  *
- * Ortho version does not share the same transform as the non-Ortho so it doesnt invalidate it */
-GTransform gBuildTempTransform(GTransformBuilder build);
-GTransform gBuildTempTransformOrtho(GTransformBuilder build);
+ * Ortho version does not share the same trans as the non-Ortho so it doesnt invalidate it */
+Mat ToTmpMat(Trans trans);
+Mat ToTmpMatOrtho(Trans trans);
 
-/* transform 2D point in place */
-void gTransformPoint(GTransform transform, float* point);
+/* trans 2D point in place */
+void TransPt(Mat mat, float* point);
 
-/* transform 2D point in place by inverse of transform note that this only works if the matrix is
+/* trans 2D point in place by inverse of trans note that this only works if the mat is
  * orthogonal, which means that it cannot have scale */
-void gInverseTransformPoint(GTransform transform, float* point);
+void InvTransPt(Mat mat, float* point);
 
 /* add a rectangle to mesh */
-void gQuad(GMesh mesh, float x, float y, float width, float height);
-void gTexturedQuad(GMesh mesh,
+void Quad(Mesh mesh, float x, float y, float width, float height);
+void TexdQuad(Mesh mesh,
   float x, float y, float u, float v,
   float width, float height, float uWidth, float vHeight
 );
 
 /* add a triangle to mesh */
-void gTriangle(GMesh mesh,
-  float x1, float y1, float x2, float y2, float x3, float y3);
-void gTexturedTriangle(GMesh mesh,
+void Tri(Mesh mesh, float x1, float y1, float x2, float y2, float x3, float y3);
+void TexdTri(Mesh mesh,
   float x1, float y1, float u1, float v1,
   float x2, float y2, float u2, float v2,
   float x3, float y3, float u3, float v3
@@ -293,325 +292,330 @@ void gTexturedTriangle(GMesh mesh,
 
 /* draw gradients using vertex color interpolation */
 
-void gQuadGradientH(GMesh mesh, float x, float y, float width, float height, int n, int* colors);
-void gQuadGradientV(GMesh mesh, float x, float y, float width, float height, int n, int* colors);
+void QuadGradH(Mesh mesh, float x, float y, float width, float height, int n, int* colors);
+void QuadGradV(Mesh mesh, float x, float y, float width, float height, int n, int* colors);
 
-/* convert ARGB color to { r, g, b, a } (0.0-1.0) */
-void gColorToFloats(int color, float* floats);
+/* convert Argb color to { r, g, b, a } (0.0-1.0) */
+void ColToFlts(int color, float* floats);
 
-/* convert { r, g, b, a } (0.0-1.0) to ARGB color */
-int gFloatsToColor(float* f);
+/* convert { r, g, b, a } (0.0-1.0) to Argb color */
+int FltsToCol(float* f);
 
 /* linearly interpolate between colors a and b */
-int gMix(int a, int b, float amount);
+int Mix(int a, int b, float amount);
 
 /* multiply color's rgb values by scalar (does not touch alpha) */
-int gMulScalar(int color, float scalar);
+int MulScalar(int color, float scalar);
 
 /* add colors together (clamps values to avoid overflow) */
-int gAdd(int a, int b);
+int Add(int a, int b);
 
 /* alpha blend between color src and dst. alpha is not premultiplied */
-int gAlphaBlend(int src, int dst);
+int AlphaBlend(int src, int dst);
 
-/* convert rgba pixels to 1bpp. all non-transparent colors become a 1 and transparency becomes 0.
- * the data is tightly packed (8 pixels per byte).
- * the returned data is an array and must be freed with wbArrayFree */
-char* gARGBTo1BPP(int* pixels, int numPixels);
-char* gARGBArrayTo1BPP(int* pixels);
-int* g1BPPToARGB(char* data, int numBytes);
-int* g1BPPArrayToARGB(char* data);
+/* same as alpha blend but blends in place into dst */
+void AlphaBlendp(int* dst, int src);
+
+/* convert rgba pixs to 1bpp. all non-transparent colors become a 1 and transparency becomes 0.
+ * the data is tightly packed (8 pixs per byte).
+ * the returned data is an array and must be freed with ArrFree */
+char* ArgbToOneBpp(int* pixs, int numPixs);
+char* ArgbArrToOneBpp(int* pixs);
+int* OneBppToArgb(char* data, int numBytes);
+int* OneBppArrToArgb(char* data);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                        BITMAP FONTS                                            */
 /* ---------------------------------------------------------------------------------------------- */
 
-typedef struct _GFont* GFont;
+typedef struct _Ft* Ft;
 
-/* simplest form of bitmap font.
+/* simplest form of bitmap ft.
  *
- * this assumes pixels is a tightly packed grid of 32x3 characters that cover ascii 0x20-0x7f
+ * this assumes pixs is a tightly packed grid of 32x3 characters that cover ascii 0x20-0x7f
  * (from space to the end of the ascii table).
  *
  * while this is the fastest way for the renderer to look up characters, it should only be used in
- * cases where you have a hardcoded font that's never gonna change. it was created to bootstrap
- * the built-in font */
-GFont gCreateFontFromSimpleGrid(int* pixels, int width, int height, int charWidth, int charHeight);
-GFont gCreateFontFromSimpleGridFile(char* filePath, int charWidth, int charHeight);
+ * cases where you have a hardcoded ft that's never gonna change. it was created to bootstrap
+ * the built-in ft */
+Ft MkFtFromSimpleGrid(int* pixs, int width, int height, int charWidth, int charHeight);
+Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight);
 
-/* basic built in bitmap font */
-GFont gDefaultFont();
+/* basic built in bitmap ft */
+Ft DefFt();
 
-void gDestroyFont(GFont font);
-GTexture gFontTexture(GFont font);
+void RmFt(Ft ft);
+Tex FtTex(Ft ft);
 
-/* generate vertices and uv's for drawing string. must be rendered with the font texture from
- * gFontTexture or a texture that has the same exact layout */
-void gFont(GMesh mesh, GFont font, int x, int y, char* string);
+/* generate vertices and uv's for drawing string. must be rendered with the ft tex from
+ * FtTex or a tex that has the same exact layout */
+void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string);
 
-void gDrawFont(GFont font, int x, int y, char* string);
+void PutFt(Ft ft, int x, int y, char* string);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                       RESIZABLE ARRAYS                                         */
 /*                                                                                                */
 /* make sure your initial pointer is initialized to NULL which counts as an empty array.          */
-/* these are special fat pointers and must be freed with wbDestroyArray                           */
+/* these are special fat pointers and must be freed with RmArr                           */
 /* ---------------------------------------------------------------------------------------------- */
 
-void wbDestroyArray(void* array);
-int wbArrayLen(void* array);
-void wbSetArrayLen(void* array, int len);
+void RmArr(void* array);
+int ArrLen(void* array);
+void SetArrLen(void* array, int len);
 
 /* shorthand macro to append a single element to the array */
-#define wbArrayAppend(pArray, x) { \
-  int len = wbArrayLen(*(pArray)); \
-  wbArrayReserve((pArray), 1); \
-  (*(pArray))[len] = (x); \
-  wbSetArrayLen(*(pArray), len + 1); \
+#define ArrCat(pArr, x) { \
+  int len = ArrLen(*(pArr)); \
+  ArrReserve((pArr), 1); \
+  (*(pArr))[len] = (x); \
+  SetArrLen(*(pArr), len + 1); \
 }
 
 /* reserve memory for at least numElements extra elements.
  * returns a pointer to the end of the array */
-#define wbArrayReserve(pArray, numElements) \
-  wbArrayReserveEx((void**)(pArray), sizeof((*pArray)[0]), numElements)
+#define ArrReserve(pArr, numElements) \
+  ArrReserveEx((void**)(pArr), sizeof((*pArr)[0]), numElements)
 
 /* reserve memory for at least numElements extra elements and set the
  * array length to current length + numElements.
  * returns a pointer to the beginning of the new elements */
-#define wbArrayAlloc(pArray, numElements) \
-  wbArrayAllocEx((void**)(pArray), sizeof((*pArray)[0]), numElements)
+#define ArrAlloc(pArr, numElements) \
+  ArrAllocEx((void**)(pArr), sizeof((*pArr)[0]), numElements)
 
-void wbArrayStrCat(char** pArray, char* str);
+void ArrStrCat(char** pArr, char* str);
 
-void* wbArrayReserveEx(void** pArray, int elementSize, int numElements);
-void* wbArrayAllocEx(void** pArray, int elementSize, int numElements);
+void* ArrReserveEx(void** pArr, int elementSize, int numElements);
+void* ArrAllocEx(void** pArr, int elementSize, int numElements);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                   MISC UTILS AND MACROS                                        */
 /* ---------------------------------------------------------------------------------------------- */
 
-#define wbMin(x, y) ((x) < (y) ? (x) : (y))
-#define wbMax(x, y) ((x) > (y) ? (x) : (y))
-#define wbClamp(x, min, max) wbMax(min, wbMin(max, x))
+#define Min(x, y) ((x) < (y) ? (x) : (y))
+#define Max(x, y) ((x) > (y) ? (x) : (y))
+#define Clamp(x, min, max) Max(min, Min(max, x))
 
 /* (a3, b3) = (a1, b1) - (a2, b2) */
-#define wbSub2(a1, b1, a2, b2, a3, b3) \
+#define Sub2(a1, b1, a2, b2, a3, b3) \
   ((a3) = (a1) - (a2)), \
   ((b3) = (b1) - (b2))
 
 /* cross product between (x1, y1) and (x2, y2) */
-#define wbCross(x1, y1, x2, y2) ((x1) * (y2) - (y1) * (x2))
+#define Cross(x1, y1, x2, y2) ((x1) * (y2) - (y1) * (x2))
 
-#define wbToRadians(degrees) ((degrees) / 360 * WB_PI * 2)
+#define ToRad(deg) ((deg) / 360 * PI * 2)
 
 /* return the closest power of two that is higher than x */
-int wbRoundUpToPowerOfTwo(int x);
+int RoundUpToPowerOfTwo(int x);
 
 /* null-terminated string utils */
-int wbStrLen(char* s);
-void wbStrCopy(char* dst, char* src);
+int StrLen(char* s);
+void StrCopy(char* dst, char* src);
 
 /* mem utils */
-int wbMemCmp(void* a, void* b, int n);
+int MemCmp(void* a, void* b, int n);
 
 /* protobuf style varints. encoded in base 128. each byte contains 7 bits of the integer and the
  * msb is set if there's more. byte order is little endian */
 
-int wbDecodeVarInt32(char** pData);          /* increments *pData past the varint */
-int wbEncodeVarInt32(void* data, int x);     /* returns num of bytes written */
-void wbAppendVarInt32(char** pArray, int x); /* append to resizable arr */
+int DecVarI32(char** pData);          /* increments *pData past the varint */
+int EncVarI32(void* data, int x);     /* returns num of bytes written */
+void CatVarI32(char** pArr, int x); /* append to resizable arr */
 
 /* encode integers in little endian */
-int wbEncodeInt32(void* data, int x);
-int wbDecodeInt32(char** pData);
-void wbAppendInt32(char** pArray, int x);
+int EncI32(void* data, int x);
+int DecI32(char** pData);
+void CatI32(char** pArr, int x);
 
-void wbSwapFloats(float* a, float* b);
+void SwpFlts(float* a, float* b);
 
-/* encode data to a base64 string. returned string must be freed with osFree */
-char* wbToBase64(void* data, int dataSize);
-char* wbArrayToBase64(char* data);
-char* wbArrayFromBase64(char* base64Data);
+/* encode data to a b64 string. returned string must be freed with Free */
+char* ToB64(void* data, int dataSize);
+char* ArrToB64(char* data);
+char* ArrFromB64(char* b64Data);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                      ENUMS AND CONSTANTS                                       */
 /* ---------------------------------------------------------------------------------------------- */
 
-#define WB_PI 3.141592653589793238462643383279502884
+#ifndef PI
+#define PI 3.141592653589793238462643383279502884
+#endif
 
-/* message types returned by osMessageType */
+/* message types returned by MsgType */
 enum {
-  OS_QUIT = 1,
-  OS_KEYDOWN,
-  OS_KEYUP,
-  OS_MOTION,
-  OS_SIZE,
-  OS_LAST_EVENT_TYPE
+  QUIT = 1,
+  KEYDOWN,
+  KEYUP,
+  MOTION,
+  SIZE,
+  LAST_EVENT_TYPE
 };
 
-/* flags for the bitfield returned by osMessageKeyState */
+/* flags for the bitfield returned by MsgKeyState */
 enum {
-  OS_FSHIFT     = 1<<1,
-  OS_FCONTROL   = 1<<2,
-  OS_FALT       = 1<<3,
-  OS_FSUPER     = 1<<4,
-  OS_FCAPS_LOCK = 1<<5,
-  OS_FNUM_LOCK  = 1<<6,
-  OS_FREPEAT    = 1<<7,
-  OS_FLAST_STATE
+  FSHIFT     = 1<<1,
+  FCONTROL   = 1<<2,
+  FALT       = 1<<3,
+  FSUPER     = 1<<4,
+  FCAPS_LOCK = 1<<5,
+  FNUM_LOCK  = 1<<6,
+  FREPEAT    = 1<<7,
+  FLAST_STATE
 };
 
-#define OS_FCTRL OS_FCONTROL
+#define FCTRL FCONTROL
 
-#define OS_MLEFT OS_MOUSE1
-#define OS_MMID OS_MOUSE2
-#define OS_MRIGHT OS_MOUSE3
-#define OS_MWHEELUP OS_MOUSE4
-#define OS_MWHEELDOWN OS_MOUSE5
+#define MLEFT MOUSE1
+#define MMID MOUSE2
+#define MRIGHT MOUSE3
+#define MWHEELUP MOUSE4
+#define MWHEELDOWN MOUSE5
 
-/* keys returned by osMessageKey */
+/* keys returned by MsgKey */
 enum {
-  OS_MOUSE1          =   1,
-  OS_MOUSE2          =   2,
-  OS_MOUSE3          =   3,
-  OS_MOUSE4          =   4,
-  OS_MOUSE5          =   5,
-  OS_SPACE           =  32,
-  OS_APOSTROPHE      =  39,
-  OS_COMMA           =  44,
-  OS_MINUS           =  45,
-  OS_PERIOD          =  46,
-  OS_SLASH           =  47,
-  OS_0               =  48,
-  OS_1               =  49,
-  OS_2               =  50,
-  OS_3               =  51,
-  OS_4               =  52,
-  OS_5               =  53,
-  OS_6               =  54,
-  OS_7               =  55,
-  OS_8               =  56,
-  OS_9               =  57,
-  OS_SEMICOLON       =  59,
-  OS_EQUAL           =  61,
-  OS_A               =  65,
-  OS_B               =  66,
-  OS_C               =  67,
-  OS_D               =  68,
-  OS_E               =  69,
-  OS_F               =  70,
-  OS_G               =  71,
-  OS_H               =  72,
-  OS_I               =  73,
-  OS_J               =  74,
-  OS_K               =  75,
-  OS_L               =  76,
-  OS_M               =  77,
-  OS_N               =  78,
-  OS_O               =  79,
-  OS_P               =  80,
-  OS_Q               =  81,
-  OS_R               =  82,
-  OS_S               =  83,
-  OS_T               =  84,
-  OS_U               =  85,
-  OS_V               =  86,
-  OS_W               =  87,
-  OS_X               =  88,
-  OS_Y               =  89,
-  OS_Z               =  90,
-  OS_LEFT_BRACKET    =  91,
-  OS_BACKSLASH       =  92,
-  OS_RIGHT_BRACKET   =  93,
-  OS_GRAVE_ACCENT    =  96,
-  OS_WORLD_1         = 161,
-  OS_WORLD_2         = 162,
-  OS_ESCAPE          = 256,
-  OS_ENTER           = 257,
-  OS_TAB             = 258,
-  OS_BACKSPACE       = 259,
-  OS_INSERT          = 260,
-  OS_DELETE          = 261,
-  OS_RIGHT           = 262,
-  OS_LEFT            = 263,
-  OS_DOWN            = 264,
-  OS_UP              = 265,
-  OS_PAGE_UP         = 266,
-  OS_PAGE_DOWN       = 267,
-  OS_HOME            = 268,
-  OS_END             = 269,
-  OS_CAPS_LOCK       = 280,
-  OS_SCROLL_LOCK     = 281,
-  OS_NUM_LOCK        = 282,
-  OS_PRINT_SCREEN    = 283,
-  OS_PAUSE           = 284,
-  OS_F1              = 290,
-  OS_F2              = 291,
-  OS_F3              = 292,
-  OS_F4              = 293,
-  OS_F5              = 294,
-  OS_F6              = 295,
-  OS_F7              = 296,
-  OS_F8              = 297,
-  OS_F9              = 298,
-  OS_F10             = 299,
-  OS_F11             = 300,
-  OS_F12             = 301,
-  OS_F13             = 302,
-  OS_F14             = 303,
-  OS_F15             = 304,
-  OS_F16             = 305,
-  OS_F17             = 306,
-  OS_F18             = 307,
-  OS_F19             = 308,
-  OS_F20             = 309,
-  OS_F21             = 310,
-  OS_F22             = 311,
-  OS_F23             = 312,
-  OS_F24             = 313,
-  OS_F25             = 314,
-  OS_KP_0            = 320,
-  OS_KP_1            = 321,
-  OS_KP_2            = 322,
-  OS_KP_3            = 323,
-  OS_KP_4            = 324,
-  OS_KP_5            = 325,
-  OS_KP_6            = 326,
-  OS_KP_7            = 327,
-  OS_KP_8            = 328,
-  OS_KP_9            = 329,
-  OS_KP_DECIMAL      = 330,
-  OS_KP_DIVIDE       = 331,
-  OS_KP_MULTIPLY     = 332,
-  OS_KP_SUBTRACT     = 333,
-  OS_KP_ADD          = 334,
-  OS_KP_ENTER        = 335,
-  OS_KP_EQUAL        = 336,
-  OS_LEFT_SHIFT      = 340,
-  OS_LEFT_CONTROL    = 341,
-  OS_LEFT_ALT        = 342,
-  OS_LEFT_SUPER      = 343,
-  OS_RIGHT_SHIFT     = 344,
-  OS_RIGHT_CONTROL   = 345,
-  OS_RIGHT_ALT       = 346,
-  OS_RIGHT_SUPER     = 347,
-  OS_MENU            = 348,
-  OS_LAST_KEY
+  MOUSE1          =   1,
+  MOUSE2          =   2,
+  MOUSE3          =   3,
+  MOUSE4          =   4,
+  MOUSE5          =   5,
+  SPACE           =  32,
+  APOSTROPHE      =  39,
+  COMMA           =  44,
+  MINUS           =  45,
+  PERIOD          =  46,
+  SLASH           =  47,
+  K0              =  48,
+  K1              =  49,
+  K2              =  50,
+  K3              =  51,
+  K4              =  52,
+  K5              =  53,
+  K6              =  54,
+  K7              =  55,
+  K8              =  56,
+  K9              =  57,
+  SEMICOLON       =  59,
+  EQUAL           =  61,
+  A               =  65,
+  B               =  66,
+  C               =  67,
+  D               =  68,
+  E               =  69,
+  F               =  70,
+  G               =  71,
+  H               =  72,
+  I               =  73,
+  J               =  74,
+  K               =  75,
+  L               =  76,
+  M               =  77,
+  N               =  78,
+  O               =  79,
+  P               =  80,
+  Q               =  81,
+  R               =  82,
+  S               =  83,
+  T               =  84,
+  U               =  85,
+  V               =  86,
+  W               =  87,
+  X               =  88,
+  Y               =  89,
+  Z               =  90,
+  LEFT_BRACKET    =  91,
+  BACKSLASH       =  92,
+  RIGHT_BRACKET   =  93,
+  GRAVE_ACCENT    =  96,
+  WORLD_1         = 161,
+  WORLD_2         = 162,
+  ESCAPE          = 256,
+  ENTER           = 257,
+  TAB             = 258,
+  BACKSPACE       = 259,
+  INSERT          = 260,
+  DELETE          = 261,
+  RIGHT           = 262,
+  LEFT            = 263,
+  DOWN            = 264,
+  UP              = 265,
+  PAGE_UP         = 266,
+  PAGE_DOWN       = 267,
+  HOME            = 268,
+  END             = 269,
+  CAPS_LOCK       = 280,
+  SCROLL_LOCK     = 281,
+  NUM_LOCK        = 282,
+  PRINT_SCREEN    = 283,
+  PAUSE           = 284,
+  F1              = 290,
+  F2              = 291,
+  F3              = 292,
+  F4              = 293,
+  F5              = 294,
+  F6              = 295,
+  F7              = 296,
+  F8              = 297,
+  F9              = 298,
+  F10             = 299,
+  F11             = 300,
+  F12             = 301,
+  F13             = 302,
+  F14             = 303,
+  F15             = 304,
+  F16             = 305,
+  F17             = 306,
+  F18             = 307,
+  F19             = 308,
+  F20             = 309,
+  F21             = 310,
+  F22             = 311,
+  F23             = 312,
+  F24             = 313,
+  F25             = 314,
+  KP_0            = 320,
+  KP_1            = 321,
+  KP_2            = 322,
+  KP_3            = 323,
+  KP_4            = 324,
+  KP_5            = 325,
+  KP_6            = 326,
+  KP_7            = 327,
+  KP_8            = 328,
+  KP_9            = 329,
+  KP_DECIMAL      = 330,
+  KP_DIVIDE       = 331,
+  KP_MULTIPLY     = 332,
+  KP_SUBTRACT     = 333,
+  KP_ADD          = 334,
+  KP_ENTER        = 335,
+  KP_EQUAL        = 336,
+  LEFT_SHIFT      = 340,
+  LEFT_CONTROL    = 341,
+  LEFT_ALT        = 342,
+  LEFT_SUPER      = 343,
+  RIGHT_SHIFT     = 344,
+  RIGHT_CONTROL   = 345,
+  RIGHT_ALT       = 346,
+  RIGHT_SUPER     = 347,
+  MENU            = 348,
+  LAST_KEY
 };
 
-/* texture wrap modes */
+/* tex wrap modes */
 enum {
-  G_CLAMP_TO_EDGE,
-  G_MIRRORED_REPEAT,
-  G_REPEAT,
-  G_LAST_TEXTURE_WRAP
+  CLAMP_TO_EDGE,
+  MIRRORED_REPEAT,
+  REPEAT,
+  LAST_TEXTURE_WRAP
 };
 
-/* texture filters */
+/* tex filters */
 enum {
-  G_NEAREST,
-  G_LINEAR,
-  G_LAST_TEXTURE_FILTER
+  NEAREST,
+  LINEAR,
+  LAST_TEXTURE_FILTER
 };
 
 #endif /* WEEBCORE_HEADER */
@@ -620,7 +624,7 @@ enum {
 /* ############################################################################################## */
 /* ############################################################################################## */
 /*                                                                                                */
-/*      Header part ends here. This is all you need to know to use it. Implementation below.      */
+/*      Hdr part ends here. This is all you need to know to use it. Implementation below.      */
 /*                                                                                                */
 /* ############################################################################################## */
 /* ############################################################################################## */
@@ -630,71 +634,71 @@ enum {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-typedef struct _WBArrayHeader {
+typedef struct _ArrHdr {
   int capacity;
   int length;
-} WBArrayHeader;
+} ArrHdr;
 
-static WBArrayHeader* wbArrayHeader(void* array) {
+static ArrHdr* GetArrHdr(void* array) {
   if (!array) return 0;
-  return (WBArrayHeader*)array - 1;
+  return (ArrHdr*)array - 1;
 }
 
-void wbDestroyArray(void* array) {
-  osFree(wbArrayHeader(array));
+void RmArr(void* array) {
+  Free(GetArrHdr(array));
 }
 
-int wbArrayLen(void* array) {
+int ArrLen(void* array) {
   if (!array) return 0;
-  return wbArrayHeader(array)->length;
+  return GetArrHdr(array)->length;
 }
 
-void wbSetArrayLen(void* array, int length) {
+void SetArrLen(void* array, int length) {
   if (array) {
-    wbArrayHeader(array)->length = length;
+    GetArrHdr(array)->length = length;
   }
 }
 
-void wbArrayStrCat(char** pArray, char* str) {
+void ArrStrCat(char** pArr, char* str) {
   for (; *str; ++str) {
-    wbArrayAppend(pArray, *str);
+    ArrCat(pArr, *str);
   }
 }
 
-void* wbArrayReserveEx(void** pArray, int elementSize, int numElements) {
-  WBArrayHeader* header;
-  if (!*pArray) {
-    int capacity = wbRoundUpToPowerOfTwo(wbMax(numElements, 16));
-    header = osAlloc(sizeof(WBArrayHeader) + elementSize * capacity);
+void* ArrReserveEx(void** pArr, int elementSize, int numElements) {
+  ArrHdr* header;
+  if (!*pArr) {
+    int capacity = RoundUpToPowerOfTwo(Max(numElements, 16));
+    header = Alloc(sizeof(ArrHdr) + elementSize * capacity);
     header->capacity = capacity;
-    *pArray = header + 1;
+    *pArr = header + 1;
   } else {
     int minCapacity;
-    header = wbArrayHeader(*pArray);
+    header = GetArrHdr(*pArr);
     minCapacity = header->length + numElements;
     if (header->capacity < minCapacity) {
       int newSize;
       while (header->capacity < minCapacity) {
         header->capacity *= 2;
       }
-      newSize = sizeof(WBArrayHeader) + elementSize * header->capacity;
-      header = osRealloc(header, newSize);
-      *pArray = header + 1;
+      newSize = sizeof(ArrHdr) + elementSize * header->capacity;
+      header = Realloc(header, newSize);
+      *pArr = header + 1;
     }
   }
-  return (char*)*pArray + wbArrayLen(*pArray) * elementSize;
+  return (char*)*pArr + ArrLen(*pArr) * elementSize;
 }
 
-void* wbArrayAllocEx(void** pArray, int elementSize, int numElements) {
-  void* res = wbArrayReserveEx(pArray, elementSize, numElements);
-  wbSetArrayLen(*pArray, wbArrayLen(*pArray) + numElements);
+void* ArrAllocEx(void** pArr, int elementSize, int numElements) {
+  void* res = ArrReserveEx(pArr, elementSize, numElements);
+  SetArrLen(*pArr, ArrLen(*pArr) + numElements);
   return res;
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
 /* https://graphics.stanford.edu/~seander/bithacks.html */
-int wbRoundUpToPowerOfTwo(int x) {
+int RoundUpToPowerOfTwo(int x) {
   --x;
   x |= x >> 1;
   x |= x >> 2;
@@ -704,19 +708,19 @@ int wbRoundUpToPowerOfTwo(int x) {
   return ++x;
 }
 
-int wbStrLen(char* s) {
+int StrLen(char* s) {
   char* p;
   for (p = s; *p; ++p);
   return p - s;
 }
 
-void wbStrCopy(char* dst, char* src) {
+void StrCopy(char* dst, char* src) {
   while (*src) {
     *dst++ = *src++;
   }
 }
 
-int wbDecodeVarInt32(char** pData) {
+int DecVarI32(char** pData) {
   unsigned char* p;
   int res = 0, shift = 0, more = 1;
   for (p = (unsigned char*)*pData; more; ++p) {
@@ -728,7 +732,7 @@ int wbDecodeVarInt32(char** pData) {
   return res;
 }
 
-int wbEncodeVarInt32(void* data, int x) {
+int EncVarI32(void* data, int x) {
   unsigned char* p = data;
   unsigned u = (unsigned)x;
   while (1) {
@@ -744,13 +748,13 @@ int wbEncodeVarInt32(void* data, int x) {
   return p - (unsigned char*)data;
 }
 
-void wbAppendVarInt32(char** pArray, int x) {
-  char* p = wbArrayReserve(pArray, 4);
-  int n = wbEncodeVarInt32(p, x);
-  wbSetArrayLen(*pArray, wbArrayLen(*pArray) + n);
+void CatVarI32(char** pArr, int x) {
+  char* p = ArrReserve(pArr, 4);
+  int n = EncVarI32(p, x);
+  SetArrLen(*pArr, ArrLen(*pArr) + n);
 }
 
-int wbEncodeInt32(void* data, int x) {
+int EncI32(void* data, int x) {
   unsigned char* p = data;
   p[0] = (x & 0x000000ff) >>  0;
   p[1] = (x & 0x0000ff00) >>  8;
@@ -759,18 +763,18 @@ int wbEncodeInt32(void* data, int x) {
   return 4;
 }
 
-int wbDecodeInt32(char** pData) {
+int DecI32(char** pData) {
   unsigned char* p = (unsigned char*)*pData;
   *pData += 4;
   return (p[0] <<  0) | (p[1] <<  8) | (p[2] << 16) | (p[3] << 24);
 }
 
-void wbAppendInt32(char** pArray, int x) {
-  char* p = wbArrayAlloc(pArray, 4);
-  wbEncodeInt32(p, x);
+void CatI32(char** pArr, int x) {
+  char* p = ArrAlloc(pArr, 4);
+  EncI32(p, x);
 }
 
-int wbMemCmp(void* a, void* b, int n) {
+int MemCmp(void* a, void* b, int n) {
   unsigned char* p1 = a;
   unsigned char* p2 = b;
   int i;
@@ -784,7 +788,7 @@ int wbMemCmp(void* a, void* b, int n) {
   return 0;
 }
 
-void wbSwapFloats(float* a, float* b) {
+void SwpFlts(float* a, float* b) {
   float tmp = *a;
   *a = *b;
   *b = tmp;
@@ -792,122 +796,110 @@ void wbSwapFloats(float* a, float* b) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-struct _GTransformBuilder {
+struct _Trans {
   float sX, sY;
   float x, y;
   float oX, oY;
-  float degrees;
-  GTransform tempTransform, tempTransformOrtho;
+  float deg;
+  Mat tempMat, tempMatOrtho;
 };
 
-GTransformBuilder gCreateTransformBuilder() {
-  GTransformBuilder builder = osAlloc(sizeof(struct _GTransformBuilder));
-  builder->tempTransform = gCreateTransform();
-  builder->tempTransformOrtho = gCreateTransform();
-  gResetTransform(builder);
-  return builder;
+Trans MkTrans() {
+  Trans trans = Alloc(sizeof(struct _Trans));
+  trans->tempMat = MkMat();
+  trans->tempMatOrtho = MkMat();
+  ClrTrans(trans);
+  return trans;
 }
 
-void gDestroyTransformBuilder(GTransformBuilder builder) {
-  gDestroyTransform(builder->tempTransform);
-  gDestroyTransform(builder->tempTransformOrtho);
-  osFree(builder);
+void RmTrans(Trans trans) {
+  RmMat(trans->tempMat);
+  RmMat(trans->tempMatOrtho);
+  Free(trans);
 }
 
-void gResetTransform(GTransformBuilder builder) {
-  builder->sX = 1;
-  builder->sY = 1;
-  builder->x = builder->y =
-  builder->oX = builder->oY =
-  builder->degrees = 0;
+void ClrTrans(Trans trans) {
+  trans->sX = 1;
+  trans->sY = 1;
+  trans->x = trans->y =
+  trans->oX = trans->oY =
+  trans->deg = 0;
 }
 
-void gSetScale(GTransformBuilder builder, float x, float y) {
-  builder->sX = x;
-  builder->sY = y;
+void SetScale(Trans trans, float x, float y) {
+  trans->sX = x;
+  trans->sY = y;
 }
 
-void gSetScale1(GTransformBuilder builder, float scale) {
-  gSetScale(builder, scale, scale);
+void SetScale1(Trans trans, float scale) {
+  SetScale(trans, scale, scale);
 }
 
-void gSetPosition(GTransformBuilder builder, float x, float y) {
-  builder->x = x;
-  builder->y = y;
+void SetPos(Trans trans, float x, float y) {
+  trans->x = x;
+  trans->y = y;
 }
 
-void gSetOrigin(GTransformBuilder builder, float x, float y) {
-  builder->oX = x;
-  builder->oY = y;
+void SetOrig(Trans trans, float x, float y) {
+  trans->oX = x;
+  trans->oY = y;
 }
 
-void gSetRotation(GTransformBuilder builder, float degrees) {
-  builder->degrees = degrees;
+void SetRot(Trans trans, float deg) {
+  trans->deg = deg;
 }
 
-static void gComputeTransformBuilder(GTransformBuilder builder,
-  GTransform transform, int ortho)
-{
-  gTranslate(transform, builder->x, builder->y);
-  gRotate(transform, builder->degrees);
+static Mat CalcTrans(Trans trans, Mat mat, int ortho) {
+  Move(mat, trans->x, trans->y);
+  Rot(mat, trans->deg);
   if (!ortho) {
-    gScale(transform, builder->sX, builder->sY);
+    Scale(mat, trans->sX, trans->sY);
   }
-  gTranslate(transform, -builder->oX, -builder->oY);
+  Move(mat, -trans->oX, -trans->oY);
+  return mat;
 }
 
-GTransform gBuildTransform(GTransformBuilder builder) {
-  GTransform transform = gCreateTransform();
-  gComputeTransformBuilder(builder, transform, 0);
-  return transform;
+Mat ToMat(Trans trans) { return CalcTrans(trans, MkMat(), 0); }
+Mat ToMatOrtho(Trans trans) { return CalcTrans(trans, MkMat(), 1); }
+
+Mat ToTmpMat(Trans trans) {
+  SetIdentity(trans->tempMat);
+  return CalcTrans(trans, trans->tempMat, 0);
 }
 
-GTransform gBuildTempTransform(GTransformBuilder builder) {
-  gLoadIdentity(builder->tempTransform);
-  gComputeTransformBuilder(builder, builder->tempTransform, 0);
-  return builder->tempTransform;
-}
-
-GTransform gBuildTransformOrtho(GTransformBuilder builder) {
-  GTransform transform = gCreateTransform();
-  gComputeTransformBuilder(builder, transform, 1);
-  return transform;
-}
-
-GTransform gBuildTempTransformOrtho(GTransformBuilder builder) {
-  gLoadIdentity(builder->tempTransformOrtho);
-  gComputeTransformBuilder(builder, builder->tempTransformOrtho, 1);
-  return builder->tempTransformOrtho;
+Mat ToTmpMatOrtho(Trans trans) {
+  SetIdentity(trans->tempMatOrtho);
+  return CalcTrans(trans, trans->tempMatOrtho, 1);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void gTransformPoint(GTransform transform, float* point) {
-  GTransform copy = gCloneTransform(transform);
-  float mPoint[16];
-  osMemSet(mPoint, 0, sizeof(mPoint));
-  osMemCpy(mPoint, point, sizeof(float) * 2);
-  mPoint[3] = 1;
-  gMultiplyMatrix(copy, mPoint);
-  gGetMatrix(copy, mPoint);
-  osMemCpy(point, mPoint, sizeof(float) * 2);
-  gDestroyTransform(copy);
+void MatPt(Mat mat, float* point) {
+  Mat copy = DupMat(mat);
+  float mPt[16];
+  MemSet(mPt, 0, sizeof(mPt));
+  MemCpy(mPt, point, sizeof(float) * 2);
+  mPt[3] = 1;
+  MulMatFlt(copy, mPt);
+  GetMat(copy, mPt);
+  MemCpy(point, mPt, sizeof(float) * 2);
+  RmMat(copy);
 }
 
-void gInverseTransformPoint(GTransform transform, float* point) {
-  /* https://en.wikibooks.org/wiki/GLSL_Programming/Applying_Matrix_Transformations#Transforming_Points_with_the_Inverse_Matrix */
-  GTransform copy = gCreateTransform();
+void InvTransPt(Mat mat, float* point) {
+  /* https://en.wikibooks.org/wiki/GLSL_Programming/Applying_Matrix_Transformations#Transforming_Pts_with_the_Inverse_Matrix */
+  Mat copy = MkMat();
   float m[16];
-  gGetMatrix(transform, m);
+  GetMat(mat, m);
   point[0] -= m[12];
   point[1] -= m[13];
-  m[12] = m[13] = m[14] = m[15] = m[3] = m[7] = m[11] = 0; /* equivalent of taking the 3x3 matrix */
-  gLoadMatrix(copy, m);
-  gTransformPoint(copy, point);
-  gDestroyTransform(copy);
+  m[12] = m[13] = m[14] = m[15] = m[3] = m[7] = m[11] = 0; /* equivalent of taking the 3x3 mat */
+  SetMat(copy, m);
+  MatPt(copy, point);
+  RmMat(copy);
 }
 
-void gTexturedTriangle(GMesh mesh,
+void TexdTri(Mesh mesh,
   float x1, float y1, float u1, float v1,
   float x2, float y2, float u2, float v2,
   float x3, float y3, float u3, float v3
@@ -915,101 +907,86 @@ void gTexturedTriangle(GMesh mesh,
   /* ensure vertex order is counter-clockwise so we can cull backfaces */
   float v1x, v1y, v2x, v2y;
   float i2 = 1, i3 = 2;
-  wbSub2(x2, y2, x1, y1, v1x, v1y);
-  wbSub2(x3, y3, x1, y1, v2x, v2y);
-  if (wbCross(v1x, v1y, v2x, v2y) > 0) {
+  Sub2(x2, y2, x1, y1, v1x, v1y);
+  Sub2(x3, y3, x1, y1, v2x, v2y);
+  if (Cross(v1x, v1y, v2x, v2y) > 0) {
     i2 = 2, i3 = 1;
   }
-  gBegin(mesh);
-  gVertex(mesh, x1, y1);
-  gTexCoord(mesh, u1, v1);
-  gVertex(mesh, x2, y2);
-  gTexCoord(mesh, u2, v2);
-  gVertex(mesh, x3, y3);
-  gTexCoord(mesh, u3, v3);
-  gFace(mesh, 0, i2, i3);
-  gEnd(mesh);
+  Begin(mesh);
+  Vert(mesh, x1, y1); TexCoord(mesh, u1, v1);
+  Vert(mesh, x2, y2); TexCoord(mesh, u2, v2);
+  Vert(mesh, x3, y3); TexCoord(mesh, u3, v3);
+  Face(mesh, 0, i2, i3);
+  End(mesh);
 }
 
-void gTriangle(GMesh mesh, float x1, float y1, float x2, float y2, float x3, float y3) {
-  gTexturedTriangle(mesh,
-    x1, y1, 0, 0,
-    x2, y2, 0, 0,
-    x3, y3, 0, 0
-  );
+void Tri(Mesh mesh, float x1, float y1, float x2, float y2, float x3, float y3) {
+  TexdTri(mesh, x1, y1, 0, 0, x2, y2, 0, 0, x3, y3, 0, 0);
 }
 
-void gTexturedQuad(GMesh mesh, float x, float y, float u, float v,
-  float width, float height, float uWidth, float vHeight
-) {
-  gBegin(mesh);
-  gVertex(mesh,   x,          y          );
-  gTexCoord(mesh, u,          v          );
-  gVertex(mesh,   x,          y + height );
-  gTexCoord(mesh, u,          v + vHeight);
-  gVertex(mesh,   x + width,  y + height );
-  gTexCoord(mesh, u + uWidth, v + vHeight);
-  gVertex(mesh,   x + width,  y          );
-  gTexCoord(mesh, u + uWidth, v          );
-  gFace(mesh, 0, 1, 2);
-  gFace(mesh, 0, 2, 3);
-  gEnd(mesh);
-}
-
-
-void gQuad(GMesh mesh, float x, float y, float width, float height) {
-  gTexturedQuad(mesh, x, y, 0, 0, width, height, width, height);
-}
-
-
-void gQuadGradientH(GMesh mesh,
-  float x, float y, float width, float height, int n, int* colors)
+void TexdQuad(Mesh mesh, float x, float y, float u, float v,
+  float width, float height, float uWidth, float vHeight)
 {
+  Begin(mesh);
+  Vert(mesh, x        , y         ); TexCoord(mesh, u         , v          );
+  Vert(mesh, x        , y + height); TexCoord(mesh, u         , v + vHeight);
+  Vert(mesh, x + width, y + height); TexCoord(mesh, u + uWidth, v + vHeight);
+  Vert(mesh, x + width, y         ); TexCoord(mesh, u + uWidth, v          );
+  Face(mesh, 0, 1, 2);
+  Face(mesh, 0, 2, 3);
+  End(mesh);
+}
+
+
+void Quad(Mesh mesh, float x, float y, float width, float height) {
+  TexdQuad(mesh, x, y, 0, 0, width, height, width, height);
+}
+
+
+void QuadGradH(Mesh mesh, float x, float y, float width, float height, int n, int* colors) {
   int i;
   float off;
-  gBegin(mesh);
+  Begin(mesh);
   for (i = 0; i < n; ++i) {
     int s = i * 2;
     off = (float)i / (n - 1) * width;
-    gColor(mesh, colors[i]);
-    gVertex(mesh, x + off, y);
-    gVertex(mesh, x + off, y + height);
+    Col(mesh, colors[i]);
+    Vert(mesh, x + off, y);
+    Vert(mesh, x + off, y + height);
     if (i < n - 1) {
-      gFace(mesh, s + 0, s + 1, s + 2);
-      gFace(mesh, s + 1, s + 3, s + 2);
+      Face(mesh, s + 0, s + 1, s + 2);
+      Face(mesh, s + 1, s + 3, s + 2);
     }
   }
-  gEnd(mesh);
+  End(mesh);
 }
 
-void gQuadGradientV(GMesh mesh,
-  float x, float y, float width, float height, int n, int* colors)
-{
+void QuadGradV(Mesh mesh, float x, float y, float width, float height, int n, int* colors) {
   int i;
   float off;
-  gBegin(mesh);
+  Begin(mesh);
   for (i = 0; i < n; ++i) {
     int s = i * 2;
     off = (float)i / (n - 1) * height;
-    gColor(mesh, colors[i]);
-    gVertex(mesh, x + width, y + off);
-    gVertex(mesh,         x, y + off);
+    Col(mesh, colors[i]);
+    Vert(mesh, x + width, y + off);
+    Vert(mesh,         x, y + off);
     if (i < n - 1) {
-      gFace(mesh, s + 0, s + 1, s + 2);
-      gFace(mesh, s + 1, s + 3, s + 2);
+      Face(mesh, s + 0, s + 1, s + 2);
+      Face(mesh, s + 1, s + 3, s + 2);
     }
   }
-  gEnd(mesh);
+  End(mesh);
 }
 
-void gColorToFloats(int c, float* floats) {
+void ColToFlts(int c, float* floats) {
   floats[0] = ((c & 0x00ff0000) >> 16) / 255.0f;
   floats[1] = ((c & 0x0000ff00) >>  8) / 255.0f;
   floats[2] = ((c & 0x000000ff) >>  0) / 255.0f;
   floats[3] = ((c & 0xff000000) >> 24) / 255.0f;
 }
 
-int gFloatsToColor(float* f) {
+int FltsToCol(float* f) {
   int color = 0;
   color |= (int)(f[0] * 255.0f) << 16;
   color |= (int)(f[1] * 255.0f) <<  8;
@@ -1018,10 +995,10 @@ int gFloatsToColor(float* f) {
   return color;
 }
 
-char* wbToBase64(void* vdata, int dataSize) {
+char* ToB64(void* vdata, int dataSize) {
   static char* charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   int i, len = (dataSize / 3 + 1) * 4 + 1;
-  char* result = osAlloc(len);
+  char* result = Alloc(len);
   char* p = result;
   unsigned char* data = vdata;
   for (i = 0; i < dataSize; i += 3) {
@@ -1046,7 +1023,7 @@ char* wbToBase64(void* vdata, int dataSize) {
 
 #define NLETTERS ('Z' - 'A' + 1)
 
-static char wbDecodeBase64(char c) {
+static char DecB64(char c) {
   if (c >= 'A' && c <= 'Z') {
     c -= 'A';
   } else if (c >= 'a' && c <= 'z') {
@@ -1063,111 +1040,111 @@ static char wbDecodeBase64(char c) {
   return c;
 }
 
-char* wbArrayFromBase64(char* data) {
+char* ArrFromB64(char* data) {
   char* result = 0;
-  int len = wbStrLen(data), i;
+  int len = StrLen(data), i;
   for (i = 0; i < len; i += 4) {
-    int chunkLen = wbMin(3, len - i);
-    char* p = wbArrayAlloc(&result, chunkLen);
-    osMemSet(p, 0, chunkLen);
+    int chunkLen = Min(3, len - i);
+    char* p = ArrAlloc(&result, chunkLen);
+    MemSet(p, 0, chunkLen);
     switch (len - i) {
       default:
       case 4:
-        p[2] |= wbDecodeBase64(data[i + 3]);        /* 6 bits */
+        p[2] |= DecB64(data[i + 3]);        /* 6 bits */
       case 3:
-        p[2] |= (wbDecodeBase64(data[i + 2]) << 6); /* 2 bits */
-        p[1] |= wbDecodeBase64(data[i + 2]) >> 2;   /* 4 bits */
+        p[2] |= (DecB64(data[i + 2]) << 6); /* 2 bits */
+        p[1] |= DecB64(data[i + 2]) >> 2;   /* 4 bits */
       case 2:
-        p[1] |= (wbDecodeBase64(data[i + 1]) << 4); /* 4 bits */
-        p[0] |= wbDecodeBase64(data[i + 1]) >> 4;   /* 2 bits */
+        p[1] |= (DecB64(data[i + 1]) << 4); /* 4 bits */
+        p[0] |= DecB64(data[i + 1]) >> 4;   /* 2 bits */
       case 1:
-        p[0] |= wbDecodeBase64(data[i]) << 2;       /* 6 bits */
+        p[0] |= DecB64(data[i]) << 2;       /* 6 bits */
     }
   }
   return result;
 }
 
-char* wbArrayToBase64(char* data) {
-  return wbToBase64(data, wbArrayLen(data));
+char* ArrToB64(char* data) {
+  return ToB64(data, ArrLen(data));
 }
 
-char* gARGBTo1BPP(int* pixels, int numPixels) {
+char* ArgbToOneBpp(int* pixs, int numPixs) {
   char* data = 0;
   int i, j;
-  for (i = 0; i < numPixels;) {
+  for (i = 0; i < numPixs;) {
     char b = 0;
-    for (j = 0; j < 8 && i < numPixels; ++j, ++i) {
-      if ((pixels[i] & 0xff000000) != 0xff000000) {
+    for (j = 0; j < 8 && i < numPixs; ++j, ++i) {
+      if ((pixs[i] & 0xff000000) != 0xff000000) {
         b |= 1 << (7 - j);
       }
     }
-    wbArrayAppend(&data, b);
+    ArrCat(&data, b);
   }
   return data;
 }
 
-char* gARGBArrayTo1BPP(int* pixels) {
-  return gARGBTo1BPP(pixels, wbArrayLen(pixels));
+char* ArgbArrToOneBpp(int* pixs) {
+  return ArgbToOneBpp(pixs, ArrLen(pixs));
 }
 
-int* g1BPPToARGB(char* data, int numBytes) {
+int* OneBppToArgb(char* data, int numBytes) {
   int* result = 0;
   int i, j;
   for (i = 0; i < numBytes; ++i) {
     for (j = 0; j < 8; ++j) {
       if (data[i] & (1 << (7 - j))) {
-        wbArrayAppend(&result, 0x00000000);
+        ArrCat(&result, 0x00000000);
       } else {
-        wbArrayAppend(&result, 0xff000000);
+        ArrCat(&result, 0xff000000);
       }
     }
   }
   return result;
 }
 
-int* g1BPPArrayToARGB(char* data) {
-  return g1BPPToARGB(data, wbArrayLen(data));
+int* OneBppArrToArgb(char* data) {
+  return OneBppToArgb(data, ArrLen(data));
 }
 
-int gMix(int a, int b, float amount) {
+int Mix(int a, int b, float amount) {
   float fa[4], fb[4];
-  gColorToFloats(a, fa);
-  gColorToFloats(b, fb);
-  maLerpFloats(4, fa, fb, fa, amount);
-  maClampFloats(4, fa, fa, 0, 1);
-  return gFloatsToColor(fa);
+  ColToFlts(a, fa);
+  ColToFlts(b, fb);
+  LerpFlts(4, fa, fb, fa, amount);
+  ClampFlts(4, fa, fa, 0, 1);
+  return FltsToCol(fa);
 }
 
-static int gMulScalarUnchecked(int color, float scalar) {
+static int MulScalarUnchecked(int color, float scalar) {
   float rgba[4];
-  gColorToFloats(color, rgba);
-  maMulFloatsScalar(3, rgba, rgba, scalar);
-  return gFloatsToColor(rgba);
+  ColToFlts(color, rgba);
+  MulFltsScalar(3, rgba, rgba, scalar);
+  return FltsToCol(rgba);
 }
 
-int gMulScalar(int color, float scalar) {
+int MulScalar(int color, float scalar) {
   float rgba[4];
-  gColorToFloats(color, rgba);
-  maMulFloatsScalar(3, rgba, rgba, scalar);
-  maClampFloats(3, rgba, rgba, 0, 1);
-  return gFloatsToColor(rgba);
+  ColToFlts(color, rgba);
+  MulFltsScalar(3, rgba, rgba, scalar);
+  ClampFlts(3, rgba, rgba, 0, 1);
+  return FltsToCol(rgba);
 }
 
-int gAdd(int a, int b) {
+int Add(int a, int b) {
   float fa[4], fb[4];
-  gColorToFloats(a, fa);
-  gColorToFloats(b, fb);
-  maAddFloats(4, fa, fb, fa);
-  maClampFloats(4, fa, fa, 0, 1);
-  return gFloatsToColor(fa);
+  ColToFlts(a, fa);
+  ColToFlts(b, fb);
+  AddFlts(4, fa, fb, fa);
+  ClampFlts(4, fa, fa, 0, 1);
+  return FltsToCol(fa);
 }
 
-int gAlphaBlend(int src, int dst) {
+int AlphaBlend(int src, int dst) {
   int result;
   float d[4], s[4], da, sa;
   float outAlpha;
-  gColorToFloats(dst, d);
-  gColorToFloats(src, s);
+  ColToFlts(dst, d);
+  ColToFlts(src, s);
   sa = s[3] = 1 - s[3]; /* engine uses inverted alpha, but here we need the real alpha */
   da = d[3] = 1 - d[3];
   /*
@@ -1177,84 +1154,88 @@ int gAlphaBlend(int src, int dst) {
    * finalRGB = (srcRGB * srcAlpha + dstRGB * dstAlpha * (1 - srcAlpha)) / outAlpha
    */
   outAlpha = sa + da * (1 - sa);
-  src = gMulScalarUnchecked(src & 0xffffff, sa);
-  dst = gMulScalarUnchecked(dst & 0xffffff, da);
-  result = src + gMulScalarUnchecked(dst, 1 - sa);
-  result = gMulScalarUnchecked(result, 1.0f / outAlpha);
+  src = MulScalarUnchecked(src & 0xffffff, sa);
+  dst = MulScalarUnchecked(dst & 0xffffff, da);
+  result = src + MulScalarUnchecked(dst, 1 - sa);
+  result = MulScalarUnchecked(result, 1.0f / outAlpha);
   result |= (int)((1 - outAlpha) * 255) << 24; /* invert alpha back */
   return result;
 }
 
+void AlphaBlendp(int* dst, int src) {
+  *dst = AlphaBlend(src, *dst);
+}
+
 /* ---------------------------------------------------------------------------------------------- */
 
-struct _GFont {
-  GTexture texture;
+struct _Ft {
+  Tex tex;
   int charWidth, charHeight;
 };
 
-GFont gCreateFontFromSimpleGrid(int* pixels, int width, int height, int charWidth, int charHeight) {
-  GFont font = osAlloc(sizeof(struct _GFont));
-  if (font) {
+Ft MkFtFromSimpleGrid(int* pixs, int width, int height, int charWidth, int charHeight) {
+  Ft ft = Alloc(sizeof(struct _Ft));
+  if (ft) {
     int* decolored = 0;
     int i;
-    font->texture = gCreateTexture();
+    ft->tex = MkTex();
     for (i = 0; i < width * height; ++i) {
-      /* we want the base pixels to be white so it can be colored */
-      wbArrayAppend(&decolored, pixels[i] | 0xffffff);
+      /* we want the base pixs to be white so it can be colored */
+      ArrCat(&decolored, pixs[i] | 0xffffff);
     }
-    gPixels(font->texture, width, height, decolored);
-    wbDestroyArray(decolored);
-    font->charWidth = charWidth;
-    font->charHeight = charHeight;
+    Pixs(ft->tex, width, height, decolored);
+    RmArr(decolored);
+    ft->charWidth = charWidth;
+    ft->charHeight = charHeight;
   }
-  return font;
+  return ft;
 }
 
-GFont gCreateFontFromSimpleGridFile(char* filePath, int charWidth, int charHeight) {
-  WBSpr spr = wbCreateSprFromFile(filePath);
+Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight) {
+  Spr spr = MkSprFromFile(filePath);
   if (spr) {
-    GFont font;
-    int* textureData = wbSprToARGBArray(spr);
-    int width = wbSprWidth(spr), height = wbSprHeight(spr);
-    font = gCreateFontFromSimpleGrid(textureData, width, height, charWidth, charHeight);
-    wbDestroyArray(textureData);
-    wbDestroySpr(spr);
-    return font;
+    Ft ft;
+    int* texData = SprToArgbArr(spr);
+    int width = SprWidth(spr), height = SprHeight(spr);
+    ft = MkFtFromSimpleGrid(texData, width, height, charWidth, charHeight);
+    RmArr(texData);
+    RmSpr(spr);
+    return ft;
   }
   return 0;
 }
 
-void gDestroyFont(GFont font) {
-  if (font) {
-    gDestroyTexture(font->texture);
+void RmFt(Ft ft) {
+  if (ft) {
+    RmTex(ft->tex);
   }
-  osFree(font);
+  Free(ft);
 }
 
-GTexture gFontTexture(GFont font) { return font->texture; }
+Tex FtTex(Ft ft) { return ft->tex; }
 
-static int* wbPadPixels(int* pixels, int width, int height, int newWidth, int newHeight) {
-  int* newPixels = 0;
+static int* PadPixs(int* pixs, int width, int height, int newWidth, int newHeight) {
+  int* newPixs = 0;
   int x, y;
   for (y = 0; y < newHeight; ++y) {
     if (y < height) {
       for (x = 0; x < newWidth; ++x) {
         if (x < width) {
-          wbArrayAppend(&newPixels, pixels[y * width + x]);
+          ArrCat(&newPixs, pixs[y * width + x]);
         } else {
-          wbArrayAppend(&newPixels, 0xff000000);
+          ArrCat(&newPixs, 0xff000000);
         }
       }
     } else {
-      wbArrayAppend(&newPixels, 0xff000000);
+      ArrCat(&newPixs, 0xff000000);
     }
   }
-  return newPixels;
+  return newPixs;
 }
 
-GFont gDefaultFont() {
-  /* generated from font.wbspr using the SpriteEditor */
-  static char* base64Data =
+Ft DefFt() {
+  /* generated from ft.wbspr using the SpriteEditor */
+  static char* b64Data =
     "AIUQIQYIIIAAAAAEcIccE+c+ccAAAAAcAIUUcokIQEIIAAAEiYiiMgiCiiIIAAAiAIU0oSoAQEqIAAAImICCUggEiiAAEA"
     "QCAIAecMQAQEc+AcAIqIEMk88EceAAIcIEAIA0KQqAQEqIAAAQyIICkCiIiCAAQAEIAIAe8kkAQEIIAAAQiIQC+CiIiCAA"
     "IcIIAAAUIKkAQEAAEAIgiIgiECiQiiIIEAQAAIAEIEaAIIAAIAAgcc+cE8cQccAQAAAIAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -1267,33 +1248,33 @@ GFont gDefaultFont() {
     "iiiigcQiiiIiIQICqIAiigigQiiIIkIqiiiigCQiiqUiQIIEMAAiigigQiiIIiIiiiiigCQiUqiigIIEAAAe8eeeQeicIi"
     "ciic8eg8MeIUie+IIEAAAAAAAAACAAIAAAAAgCAAAAAAACAEIIAAAAAAAAAcAAQAAAAAgCAAAAAAAcAAAAAAAAAAAAAAAA"
     "AAAAAAAAAAAAAAAAAAAAAA";
-  char* data = wbArrayFromBase64(base64Data);
-  int* pixels = g1BPPArrayToARGB(data);
+  char* data = ArrFromB64(b64Data);
+  int* pixs = OneBppArrToArgb(data);
   int charWidth = 6;
   int charHeight = 11;
   int width = charWidth * 0x20;
   int height = charHeight * 3;
   /* temporarily pad it to power-of-two size until I have an actual rectangle packer */
-  int potWidth = wbRoundUpToPowerOfTwo(width);
-  int potHeight = wbRoundUpToPowerOfTwo(height);
-  int* potPixels = wbPadPixels(pixels, width, height, potWidth, potHeight);
-  GFont font = gCreateFontFromSimpleGrid(potPixels, potWidth, potHeight, charWidth, charHeight);
-  wbDestroyArray(data);
-  wbDestroyArray(pixels);
-  wbDestroyArray(potPixels);
-  return font;
+  int potWidth = RoundUpToPowerOfTwo(width);
+  int potHeight = RoundUpToPowerOfTwo(height);
+  int* potPixs = PadPixs(pixs, width, height, potWidth, potHeight);
+  Ft ft = MkFtFromSimpleGrid(potPixs, potWidth, potHeight, charWidth, charHeight);
+  RmArr(data);
+  RmArr(pixs);
+  RmArr(potPixs);
+  return ft;
 }
 
-void gFont(GMesh mesh, GFont font, int x, int y, char* string) {
+void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string) {
   char c;
   int left = x;
-  int width = font->charWidth;
-  int height = font->charHeight;
+  int width = ft->charWidth;
+  int height = ft->charHeight;
   for (; (c = *string); ++string) {
     if (c >= 0x20) {
       int u = ((c - 0x20) % 0x20) * width;
       int v = ((c - 0x20) / 0x20) * height;
-      gTexturedQuad(mesh, x, y, u, v, width, height, width, height);
+      TexdQuad(mesh, x, y, u, v, width, height, width, height);
       x += width;
     } else if (c == '\n') {
       y += height;
@@ -1302,274 +1283,272 @@ void gFont(GMesh mesh, GFont font, int x, int y, char* string) {
   }
 }
 
-void gDrawFont(GFont font, int x, int y, char* string) {
-  GTransformBuilder tbuilder = gCreateTransformBuilder();
-  GMesh mesh = gCreateMesh();
-  gFont(mesh, font, x, y, string);
-  gSetPosition(tbuilder, x, y);
-  gDrawMesh(mesh, gBuildTempTransform(tbuilder), gFontTexture(font));
-  gDestroyMesh(mesh);
+void PutFt(Ft ft, int x, int y, char* string) {
+  Trans trans = MkTrans();
+  Mesh mesh = MkMesh();
+  FtMesh(mesh, ft, x, y, string);
+  SetPos(trans, x, y);
+  PutMesh(mesh, ToTmpMat(trans), FtTex(ft));
+  RmMesh(mesh);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-float maLerp(float a, float b, float amount) {
+float Lerp(float a, float b, float amount) {
   return a * (1 - amount) + b * amount;
 }
 
-void maLerpFloats(int n, float* a, float* b, float* c, float amount) {
+void LerpFlts(int n, float* a, float* b, float* c, float amount) {
   int i;
   for (i = 0; i < n; ++i) {
-    c[i] = maLerp(a[i], b[i], amount);
+    c[i] = Lerp(a[i], b[i], amount);
   }
 }
 
-void maMulFloatsScalar(int n, float* floats, float* result, float scalar) {
+void MulFltsScalar(int n, float* floats, float* result, float scalar) {
   int i;
   for (i = 0; i < n; ++i) {
     result[i] = floats[i] * scalar;
   }
 }
 
-void maFloorFloats(int n, float* floats, float* result) {
+void FloorFlts(int n, float* floats, float* result) {
   int i;
   for (i = 0; i < n; ++i) {
-    result[i] = maFloor(floats[i]);
+    result[i] = Floor(floats[i]);
   }
 }
 
-void maClampFloats(int n, float* floats, float* result, float min, float max) {
+void ClampFlts(int n, float* floats, float* result, float min, float max) {
   int i;
   for (i = 0; i < n; ++i) {
-    result[i] = wbClamp(floats[i], min, max);
+    result[i] = Clamp(floats[i], min, max);
   }
 }
 
-void maAddFloats(int n, float* a, float* b, float* result) {
+void AddFlts(int n, float* a, float* b, float* result) {
   int i;
   for (i = 0; i < n; ++i) {
     result[i] = a[i] + b[i];
   }
 }
 
-void maSetRect(float* rect, float left, float right, float top, float bottom) {
+void SetRect(float* rect, float left, float right, float top, float bot) {
   rect[0] = left;
   rect[1] = right;
   rect[2] = top;
-  rect[3] = bottom;
+  rect[3] = bot;
 }
 
-void maSetRectPos(float* rect, float x, float y) {
-  rect[1] = x + maRectWidth(rect);
-  rect[3] = y + maRectHeight(rect);
+void SetRectPos(float* rect, float x, float y) {
+  rect[1] = x + RectWidth(rect);
+  rect[3] = y + RectHeight(rect);
   rect[0] = x;
   rect[2] = y;
 }
 
-void maSetRectSize(float* rect, float width, float height) {
-  rect[1] = maRectX(rect) + width;
-  rect[3] = maRectY(rect) + height;
+void SetRectSize(float* rect, float width, float height) {
+  rect[1] = RectX(rect) + width;
+  rect[3] = RectY(rect) + height;
 }
 
-void maNormalizeRect(float* rect) {
+void NormRect(float* rect) {
   if (rect[0] > rect[1]) {
-    wbSwapFloats(&rect[0], &rect[1]);
+    SwpFlts(&rect[0], &rect[1]);
   }
   if (rect[2] > rect[3]) {
-    wbSwapFloats(&rect[2], &rect[3]);
+    SwpFlts(&rect[2], &rect[3]);
   }
 }
 
-void maClampRect(float* rect, float* other) {
-  rect[0] = wbMin(wbMax(rect[0], other[0]), other[1]);
-  rect[1] = wbMin(wbMax(rect[1], other[0]), other[1]);
-  rect[2] = wbMin(wbMax(rect[2], other[2]), other[3]);
-  rect[3] = wbMin(wbMax(rect[3], other[2]), other[3]);
+void ClampRect(float* rect, float* other) {
+  rect[0] = Min(Max(rect[0], other[0]), other[1]);
+  rect[1] = Min(Max(rect[1], other[0]), other[1]);
+  rect[2] = Min(Max(rect[2], other[2]), other[3]);
+  rect[3] = Min(Max(rect[3], other[2]), other[3]);
 }
 
-int maPtInRect(float* rect, float x, float y) {
+int PtInRect(float* rect, float x, float y) {
   return x >= rect[0] && x < rect[1] && y >= rect[2] && y < rect[3];
 }
 
-int maRectIntersect(float* a, float* b) {
+int RectSect(float* a, float* b) {
   return a[0] < b[1] && a[1] >= b[0] && a[2] < b[3] && a[3] >= b[2];
 }
 
-int maRectInRect(float* needle, float* haystack) {
+int RectInRect(float* needle, float* haystack) {
   return (
     needle[0] >= haystack[0] && needle[1] < haystack[1] &&
     needle[2] >= haystack[2] && needle[3] < haystack[3]
   );
 }
 
-int maRectInRectArea(float* needle, float* haystack) {
+int RectInRectArea(float* needle, float* haystack) {
   return (
-    maRectWidth(needle) <= maRectWidth(haystack) &&
-    maRectHeight(needle) <= maRectHeight(haystack)
+    RectWidth(needle) <= RectWidth(haystack) &&
+    RectHeight(needle) <= RectHeight(haystack)
   );
 }
 
-void maSetRectLeft(float* rect, float left)     { rect[0] = left; }
-void maSetRectRight(float* rect, float right)   { rect[1] = right; }
-void maSetRectTop(float* rect, float top)       { rect[2] = top; }
-void maSetRectBottom(float* rect, float bottom) { rect[3] = bottom; }
-float maRectWidth(float* rect)  { return rect[1] - rect[0]; }
-float maRectHeight(float* rect) { return rect[3] - rect[2]; }
-float maRectX(float* rect) { return rect[0]; }
-float maRectY(float* rect) { return rect[2]; }
-float maRectLeft(float* rect)   { return rect[0]; }
-float maRectRight(float* rect)  { return rect[1]; }
-float maRectTop(float* rect)    { return rect[2]; }
-float maRectBottom(float* rect) { return rect[3]; }
+void SetRectLeft(float* rect, float left)   { rect[0] = left; }
+void SetRectRight(float* rect, float right) { rect[1] = right; }
+void SetRectTop(float* rect, float top) { rect[2] = top; }
+void SetRectBot(float* rect, float bot) { rect[3] = bot; }
+float RectWidth(float* rect)  { return rect[1] - rect[0]; }
+float RectHeight(float* rect) { return rect[3] - rect[2]; }
+float RectX(float* rect) { return rect[0]; }
+float RectY(float* rect) { return rect[2]; }
+float RectLeft(float* rect)  { return rect[0]; }
+float RectRight(float* rect) { return rect[1]; }
+float RectTop(float* rect) { return rect[2]; }
+float RectBot(float* rect) { return rect[3]; }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-struct _WBSpr {
+struct _Spr {
   int width, height;
   int* palette;
   char* data;
 };
 
-#define WBSPR_DATA 0xd
-#define WBSPR_REPEAT 0xe
+#define SPR_DATA 0xd
+#define SPR_REPEAT 0xe
 
 /* TODO: maybe use hashmap to make palette lookup faster */
 static int PaletteIndex(int** palette, int color) {
   int i;
-  for (i = 0; i < wbArrayLen(*palette); ++i) {
-    if ((*palette)[i] == color) {
-      return i;
-    }
+  for (i = 0; i < ArrLen(*palette); ++i) {
+    if ((*palette)[i] == color) { return i; }
   }
-  wbArrayAppend(palette, color);
-  return wbArrayLen(*palette) - 1;
+  ArrCat(palette, color);
+  return ArrLen(*palette) - 1;
 }
 
-void wbAppendSprHeader(char** pArray, int formatVersion, int width,
+void CatSprHdr(char** pArr, int formatVersion, int width,
   int height, int* palette)
 {
   int i;
-  char* p = wbArrayAlloc(pArray, 4);
-  wbStrCopy(p, "WBSP");
-  wbAppendVarInt32(pArray, formatVersion);
-  wbAppendVarInt32(pArray, width);
-  wbAppendVarInt32(pArray, height);
-  wbAppendVarInt32(pArray, wbArrayLen(palette));
-  for (i = 0; i < wbArrayLen(palette); ++i) {
-    wbAppendInt32(pArray, palette[i]);
+  char* p = ArrAlloc(pArr, 4);
+  StrCopy(p, "SP");
+  CatVarI32(pArr, formatVersion);
+  CatVarI32(pArr, width);
+  CatVarI32(pArr, height);
+  CatVarI32(pArr, ArrLen(palette));
+  for (i = 0; i < ArrLen(palette); ++i) {
+    CatI32(pArr, palette[i]);
   }
 }
 
-char* wbARGBToSprArray(int* argb, int width, int height) {
+char* ArgbToSprArr(int* argb, int width, int height) {
   char* spr = 0;
   int* palette = 0;
   int i;
   for (i = 0; i < width * height; ++i) {
     PaletteIndex(&palette, argb[i]);
   }
-  wbAppendSprHeader(&spr, 1, width, height, palette);
+  CatSprHdr(&spr, 1, width, height, palette);
   for (i = 0; i < width * height;) {
     int start;
     for (start = i; i < width * height && argb[i] == argb[start]; ++i);
     if (i - start > 1) {
-      wbAppendVarInt32(&spr, WBSPR_REPEAT);
-      wbAppendVarInt32(&spr, i - start);
-      wbAppendVarInt32(&spr, PaletteIndex(&palette, argb[start]));
+      CatVarI32(&spr, SPR_REPEAT);
+      CatVarI32(&spr, i - start);
+      CatVarI32(&spr, PaletteIndex(&palette, argb[start]));
     } else {
       i = start + 1;
       for (; i < width * height && argb[i] != argb[i - 1]; ++i);
-      wbAppendVarInt32(&spr, WBSPR_DATA);
-      wbAppendVarInt32(&spr, i - start);
+      CatVarI32(&spr, SPR_DATA);
+      CatVarI32(&spr, i - start);
       for (; start < i; ++start) {
-        wbAppendVarInt32(&spr, PaletteIndex(&palette, argb[start]));
+        CatVarI32(&spr, PaletteIndex(&palette, argb[start]));
       }
     }
   }
-  wbDestroyArray(palette);
+  RmArr(palette);
   return spr;
 }
 
-int wbSprWidth(WBSpr spr) {
+int SprWidth(Spr spr) {
   return spr->width;
 }
 
-int wbSprHeight(WBSpr spr) {
+int SprHeight(Spr spr) {
   return spr->height;
 }
 
-WBSpr wbCreateSpr(char* data, int length) {
+Spr MkSpr(char* data, int length) {
   char* p = data;
   int paletteSize, i, dataLen;
-  WBSpr spr = osAlloc(sizeof(struct _WBSpr));
-  if (wbMemCmp(p, "WBSP", 4)) {
+  Spr spr = Alloc(sizeof(struct _Spr));
+  if (MemCmp(p, "SP", 4)) {
     /* TODO: error codes or something */
     return 0;
   }
   p += 4;
-  wbDecodeVarInt32(&p); /* format version */
-  spr->width = wbDecodeVarInt32(&p);
-  spr->height = wbDecodeVarInt32(&p);
-  paletteSize = wbDecodeVarInt32(&p);
+  DecVarI32(&p); /* format version */
+  spr->width = DecVarI32(&p);
+  spr->height = DecVarI32(&p);
+  paletteSize = DecVarI32(&p);
   for (i = 0; i < paletteSize; ++i) {
-    wbArrayAppend(&spr->palette, wbDecodeInt32(&p));
+    ArrCat(&spr->palette, DecI32(&p));
   }
   dataLen = length - (p - data);
-  wbArrayAlloc(&spr->data, dataLen);
-  osMemCpy(spr->data, p, dataLen);
+  ArrAlloc(&spr->data, dataLen);
+  MemCpy(spr->data, p, dataLen);
   return spr;
 }
 
-WBSpr wbCreateSprFromArray(char* data) {
-  return wbCreateSpr(data, wbArrayLen(data));
+Spr MkSprFromArr(char* data) {
+  return MkSpr(data, ArrLen(data));
 }
 
-WBSpr wbCreateSprFromFile(char* filePath) {
+Spr MkSprFromFile(char* filePath) {
   int len = 1024000; /* TODO: handle bigger files */
-  char* data = osAlloc(len);
-  WBSpr res;
-  len = osReadEntireFile(filePath, data, len);
-  res = len >= 0 ? wbCreateSpr(data, len) : 0;
-  osFree(data);
+  char* data = Alloc(len);
+  Spr res;
+  len = ReadFile(filePath, data, len);
+  res = len >= 0 ? MkSpr(data, len) : 0;
+  Free(data);
   return res;
 }
 
-void wbSprToARGB(WBSpr spr, int* argb) {
+void SprToArgb(Spr spr, int* argb) {
   char* p = spr->data;
-  int* pixel = argb;
-  while (p - spr->data < wbArrayLen(spr->data)) {
+  int* pix = argb;
+  while (p - spr->data < ArrLen(spr->data)) {
     int i;
-    int type = wbDecodeVarInt32(&p);
-    int length = wbDecodeVarInt32(&p);
+    int type = DecVarI32(&p);
+    int length = DecVarI32(&p);
     switch (type) {
-      case WBSPR_DATA: {
+      case SPR_DATA: {
         for (i = 0; i < length; ++i) {
-          *pixel++ = spr->palette[wbDecodeVarInt32(&p)];
+          *pix++ = spr->palette[DecVarI32(&p)];
         }
         break;
       }
-      case WBSPR_REPEAT: {
-        int color = spr->palette[wbDecodeVarInt32(&p)];
+      case SPR_REPEAT: {
+        int color = spr->palette[DecVarI32(&p)];
         for (i = 0; i < length; ++i) {
-          *pixel++ = color;
+          *pix++ = color;
         }
       }
     }
   }
 }
 
-int* wbSprToARGBArray(WBSpr spr) {
+int* SprToArgbArr(Spr spr) {
   int* res = 0;
-  wbArrayAlloc(&res, spr->width * spr->height);
-  wbSprToARGB(spr, res);
+  ArrAlloc(&res, spr->width * spr->height);
+  SprToArgb(spr, res);
   return res;
 }
 
-void wbDestroySpr(WBSpr spr) {
+void RmSpr(Spr spr) {
   if (spr) {
-    wbDestroyArray(spr->palette);
-    wbDestroyArray(spr->data);
+    RmArr(spr->palette);
+    RmArr(spr->data);
   }
-  osFree(spr);
+  Free(spr);
 }
 
 #endif /* WEEBCORE_IMPLEMENTATION */

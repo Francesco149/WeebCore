@@ -3,54 +3,51 @@
 
 #include <GL/gl.h>
 
-typedef struct _GVertex {
+typedef struct _VertData {
   float x, y;
   int color;
   float u, v;
-} GVertex;
+} VertData;
 
-struct _GMesh {
+struct _Mesh {
   int color;
-  GVertex* vertices;
+  VertData* verts;
   int* indices;
   int istart;
 };
 
-struct _GTexture {
-  GLuint handle;
-  int width, height;
-};
+struct _Tex { GLuint handle; int width, height; };
 
-typedef struct _GTransformOperation {
+typedef struct _MatOp {
   int type;
   union {
-    float degrees;
+    float deg;
     struct { float x, y; } xy;
   } u;
-} GTransformOperation;
+} MatOp;
 
 enum {
-  G_SCALE,
-  G_TRANSLATE,
-  G_ROTATE,
-  G_LAST_OPERATION
+  SCALE,
+  TRANSLATE,
+  ROTATE,
+  LAST_OPERATION
 };
 
-struct _GTransform {
-  GLfloat matrix[16];
-  GTransformOperation* operations;
+struct _Mat {
+  GLfloat mat[16];
+  MatOp* operations;
 };
 
 /* convert a 0xAARRGGBB integer to OpenGL's 0xAABBGGRR.
  * also flip alpha because we use 0 = opaque */
 
-#define G_COLOR(argb) \
+#define COL(argb) \
   ((((argb) & 0x00FF0000) >> 16) | \
     ((argb) & 0x0000FF00) | \
    (((argb) & 0x000000FF) << 16) | \
    (0xFF000000 - ((argb) & 0xFF000000)))
 
-static void gInit() {
+static void GrInit() {
   glEnable(GL_TEXTURE_2D);
   glEnable(GL_CULL_FACE);
   glEnable(GL_BLEND);
@@ -62,52 +59,52 @@ static void gInit() {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-GMesh gCreateMesh() {
-  GMesh mesh = osAlloc(sizeof(struct _GMesh));
-  gColor(mesh, 0xffffff);
+Mesh MkMesh() {
+  Mesh mesh = Alloc(sizeof(struct _Mesh));
+  Col(mesh, 0xffffff);
   return mesh;
 }
 
-void gDestroyMesh(GMesh mesh) {
+void RmMesh(Mesh mesh) {
   if (mesh) {
-    wbDestroyArray(mesh->vertices);
-    wbDestroyArray(mesh->indices);
+    RmArr(mesh->verts);
+    RmArr(mesh->indices);
   }
-  osFree(mesh);
+  Free(mesh);
 }
 
-void gColor(GMesh mesh, int color) {
-  mesh->color = G_COLOR(color);
+void Col(Mesh mesh, int color) {
+  mesh->color = COL(color);
 }
 
-void gBegin(GMesh mesh) {
+void Begin(Mesh mesh) {
   if (mesh->istart == -1) {
-    mesh->istart = wbArrayLen(mesh->vertices);
+    mesh->istart = ArrLen(mesh->verts);
   }
 }
 
-void gEnd(GMesh mesh) {
+void End(Mesh mesh) {
   mesh->istart = -1;
 }
 
-void gVertex(GMesh mesh, float x, float y) {
-  GVertex* vertex = wbArrayAlloc(&mesh->vertices, 1);
+void Vert(Mesh mesh, float x, float y) {
+  VertData* vertex = ArrAlloc(&mesh->verts, 1);
   vertex->x = x;
   vertex->y = y;
   vertex->color = mesh->color;
 }
 
-void gTexCoord(GMesh mesh, float u, float v) {
-  int len = wbArrayLen(mesh->vertices);
+void TexCoord(Mesh mesh, float u, float v) {
+  int len = ArrLen(mesh->verts);
   if (len) {
-    GVertex* vertex = &mesh->vertices[len - 1];
+    VertData* vertex = &mesh->verts[len - 1];
     vertex->u = u;
     vertex->v = v;
   }
 }
 
-void gFace(GMesh mesh, int i1, int i2, int i3) {
-  int* indices = wbArrayAlloc(&mesh->indices, 3);
+void Face(Mesh mesh, int i1, int i2, int i3) {
+  int* indices = ArrAlloc(&mesh->indices, 3);
   indices[0] = mesh->istart + i1;
   indices[1] = mesh->istart + i2;
   indices[2] = mesh->istart + i3;
@@ -115,240 +112,238 @@ void gFace(GMesh mesh, int i1, int i2, int i3) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-GTransform gCreateTransform() {
-  GTransform transform = osAlloc(sizeof(struct _GTransform));
-  gLoadIdentity(transform);
-  return transform;
+Mat MkMat() {
+  Mat mat = Alloc(sizeof(struct _Mat));
+  SetIdentity(mat);
+  return mat;
 }
 
-void gDestroyTransform(GTransform transform) {
-  if (transform) {
-    wbDestroyArray(transform->operations);
+void RmMat(Mat mat) {
+  if (mat) {
+    RmArr(mat->operations);
   }
-  osFree(transform);
+  Free(mat);
 }
 
-/* using OpenGL legacy matrix operations as my matrix library.
+/* using OpenGL legacy mat operations as my mat library.
  * hey, it's free real estate */
 
-static void gBeginTransform(GTransform transform) {
+static void BeginMat(Mat mat) {
   glPushAttrib(GL_TRANSFORM_BIT);
   glMatrixMode(GL_MODELVIEW);
   glPushMatrix();
-  if (transform) {
-    glLoadMatrixf(transform->matrix);
+  if (mat) {
+    glLoadMatrixf(mat->mat);
   } else {
     glLoadIdentity();
   }
 }
 
-static void gEndTransform(GTransform transform) {
-  if (transform) {
-    glGetFloatv(GL_MODELVIEW_MATRIX, transform->matrix);
+static void EndMat(Mat mat) {
+  if (mat) {
+    glGetFloatv(GL_MODELVIEW_MATRIX, mat->mat);
   }
   glPopMatrix();
   glPopAttrib();
 }
 
-/* i batch ops to avoid copying around the matrix data for every call */
-static void gComputeTransform(GTransform transform) {
+/* i batch ops to avoid copying around the mat data for every call */
+static void CalcMat(Mat mat) {
   int i;
-  gBeginTransform(transform);
-  if (transform) {
-    for (i = 0; i < wbArrayLen(transform->operations); ++i) {
-      GTransformOperation* op = &transform->operations[i];
+  BeginMat(mat);
+  if (mat) {
+    for (i = 0; i < ArrLen(mat->operations); ++i) {
+      MatOp* op = &mat->operations[i];
       switch (op->type) {
-        case G_SCALE:     glScalef(op->u.xy.x, op->u.xy.y, 1);     break;
-        case G_TRANSLATE: glTranslatef(op->u.xy.x, op->u.xy.y, 0); break;
-        case G_ROTATE:    glRotatef(op->u.degrees, 0, 0, 1);       break;
+        case SCALE:     glScalef(op->u.xy.x, op->u.xy.y, 1);     break;
+        case TRANSLATE: glTranslatef(op->u.xy.x, op->u.xy.y, 0); break;
+        case ROTATE:    glRotatef(op->u.deg, 0, 0, 1);           break;
       }
     }
-    wbSetArrayLen(transform->operations, 0);
+    SetArrLen(mat->operations, 0);
   }
 }
 
-GTransform gCloneTransform(GTransform source) {
-  GTransform transform = gCreateTransform();
-  gComputeTransform(source);
-  gEndTransform(source);
-  gLoadMatrix(transform, source->matrix);
-  return transform;
+Mat DupMat(Mat source) {
+  Mat mat = MkMat();
+  CalcMat(source);
+  EndMat(source);
+  SetMat(mat, source->mat);
+  return mat;
 }
 
-void gLoadIdentity(GTransform transform) {
-  wbSetArrayLen(transform->operations, 0);
-  osMemSet(transform->matrix, 0, sizeof(transform->matrix));
-  transform->matrix[0] = transform->matrix[5] = transform->matrix[10] = transform->matrix[15] = 1;
-  gEndTransform(transform);
+void SetIdentity(Mat mat) {
+  SetArrLen(mat->operations, 0);
+  MemSet(mat->mat, 0, sizeof(mat->mat));
+  mat->mat[0] = mat->mat[5] = mat->mat[10] = mat->mat[15] = 1;
+  EndMat(mat);
 }
 
-void gLoadMatrix(GTransform transform, float* matrixIn) {
-  osMemCpy(transform->matrix, matrixIn, 16 * sizeof(GLfloat));
+void SetMat(Mat mat, float* matIn) {
+  MemCpy(mat->mat, matIn, 16 * sizeof(GLfloat));
 }
 
-void gGetMatrix(GTransform transform, float* matrixOut) {
-  gComputeTransform(transform);
-  gEndTransform(transform);
-  osMemCpy(matrixOut, transform->matrix, 16 * sizeof(GLfloat));
+void GetMat(Mat mat, float* matOut) {
+  CalcMat(mat);
+  EndMat(mat);
+  MemCpy(matOut, mat->mat, 16 * sizeof(GLfloat));
 }
 
-static GTransformOperation* gOperation(GTransform transform, int t) {
-  GTransformOperation* op = wbArrayAlloc(&transform->operations, 1);
+static MatOp* Op(Mat mat, int t) {
+  MatOp* op = ArrAlloc(&mat->operations, 1);
   op->type = t;
   return op;
 }
 
-static GTransformOperation* gXYOperation(GTransform transform,
+static MatOp* XYOp(Mat mat,
   int t, float x, float y
 ) {
-  GTransformOperation* op = gOperation(transform, t);
+  MatOp* op = Op(mat, t);
   op->u.xy.x = x;
   op->u.xy.y = y;
   return op;
 }
 
-void gScale(GTransform transform, float x, float y) {
-  gXYOperation(transform, G_SCALE, x, y);
+void Scale(Mat mat, float x, float y) {
+  XYOp(mat, SCALE, x, y);
 }
 
-void gScale1(GTransform transform, float scale) {
-  gScale(transform, scale, scale);
+void Scale1(Mat mat, float scale) {
+  Scale(mat, scale, scale);
 }
 
-void gTranslate(GTransform transform, float x, float y) {
-  gXYOperation(transform, G_TRANSLATE, x, y);
+void Move(Mat mat, float x, float y) {
+  XYOp(mat, TRANSLATE, x, y);
 }
 
-void gRotate(GTransform transform, float degrees) {
-  GTransformOperation* op = gOperation(transform, G_ROTATE);
-  op->u.degrees = degrees;
+void Rot(Mat mat, float deg) {
+  MatOp* op = Op(mat, ROTATE);
+  op->u.deg = deg;
 }
 
-void gMultiplyMatrix(GTransform transform, float* matrixIn) {
-  gComputeTransform(transform);
-  glMultMatrixf(matrixIn);
-  gEndTransform(transform);
+void MulMatFlt(Mat mat, float* matIn) {
+  CalcMat(mat);
+  glMultMatrixf(matIn);
+  EndMat(mat);
 }
 
-void gMultiplyTransform(GTransform transform, GTransform other) {
-  gMultiplyMatrix(transform, other->matrix);
+void MulMat(Mat mat, Mat other) {
+  MulMatFlt(mat, other->mat);
 }
 
-void gDrawMesh(GMesh mesh, GTransform transform, GTexture texture) {
-  int stride = sizeof(GVertex);
-  GLuint tex, curTex;
+void PutMesh(Mesh mesh, Mat mat, Tex tex) {
+  int stride = sizeof(VertData);
+  GLuint gltex, curTex;
 
-  if (!wbArrayLen(mesh->indices)) {
+  if (!ArrLen(mesh->indices)) {
     return;
   }
 
-  tex = texture ? texture->handle : 0;
-  glVertexPointer(2, GL_FLOAT, stride, &mesh->vertices[0].x);
-  glColorPointer(4, GL_UNSIGNED_BYTE, stride, &mesh->vertices[0].color);
-  if (texture) {
-    glTexCoordPointer(2, GL_FLOAT, stride, &mesh->vertices[0].u);
-    /* scale texture coords so we can use pixels instead of texels */
+  gltex = tex ? tex->handle : 0;
+  glVertexPointer(2, GL_FLOAT, stride, &mesh->verts[0].x);
+  glColorPointer(4, GL_UNSIGNED_BYTE, stride, &mesh->verts[0].color);
+  if (gltex) {
+    glTexCoordPointer(2, GL_FLOAT, stride, &mesh->verts[0].u);
+    /* scale tex coords so we can use pixs instead of texels */
     glPushAttrib(GL_TRANSFORM_BIT);
     glMatrixMode(GL_TEXTURE);
     glLoadIdentity();
-    glScalef(1.0f / texture->width, 1.0f / texture->height, 1.0f);
+    glScalef(1.0f / tex->width, 1.0f / tex->height, 1.0f);
     glPopAttrib();
   }
 
   glGetIntegerv(GL_TEXTURE_BINDING_2D, (void*)&curTex);
-  if (tex != curTex) {
-    glBindTexture(GL_TEXTURE_2D, tex);
+  if (gltex != curTex) {
+    glBindTexture(GL_TEXTURE_2D, gltex);
   }
 
-  gComputeTransform(transform);
-  glDrawElements(GL_TRIANGLES, wbArrayLen(mesh->indices),
-    GL_UNSIGNED_INT, mesh->indices);
-  gEndTransform(transform);
+  CalcMat(mat);
+  glDrawElements(GL_TRIANGLES, ArrLen(mesh->indices), GL_UNSIGNED_INT, mesh->indices);
+  EndMat(mat);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-GTexture gCreateTexture() {
-  GTexture texture = osAlloc(sizeof(struct _GTexture));
-  glGenTextures(1, &texture->handle);
-  gSetTextureWrapU(texture, G_REPEAT);
-  gSetTextureWrapV(texture, G_REPEAT);
-  gSetTextureMinFilter(texture, G_NEAREST);
-  gSetTextureMagFilter(texture, G_NEAREST);
-  return texture;
+Tex MkTex() {
+  Tex tex = Alloc(sizeof(struct _Tex));
+  glGenTextures(1, &tex->handle);
+  SetTexWrapU(tex, REPEAT);
+  SetTexWrapV(tex, REPEAT);
+  SetTexMinFilter(tex, NEAREST);
+  SetTexMagFilter(tex, NEAREST);
+  return tex;
 }
 
-void gDestroyTexture(GTexture texture) {
-  if (texture) {
-    glDeleteTextures(1, &texture->handle);
+void RmTex(Tex tex) {
+  if (tex) {
+    glDeleteTextures(1, &tex->handle);
   }
-  osFree(texture);
+  Free(tex);
 }
 
-static int gTranslateTextureWrap(int mode) {
+static int ConvTexWrap(int mode) {
   switch (mode) {
-    case G_CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
-    case G_MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
-    case G_REPEAT: return GL_REPEAT;
+    case CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
+    case MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
+    case REPEAT: return GL_REPEAT;
   }
-  return G_REPEAT;
+  return REPEAT;
 }
 
-static int gTranslateTextureFilter(int filter) {
+static int ConvTexFilter(int filter) {
   switch (filter) {
-    case G_NEAREST: return GL_NEAREST;
-    case G_LINEAR: return GL_LINEAR;
+    case NEAREST: return GL_NEAREST;
+    case LINEAR: return GL_LINEAR;
   }
-  return G_NEAREST;
+  return NEAREST;
 }
 
-static void gSetTextureParam(GTexture texture, int param, int value) {
-  glBindTexture(GL_TEXTURE_2D, texture->handle);
+static void SetTexParam(Tex tex, int param, int value) {
+  glBindTexture(GL_TEXTURE_2D, tex->handle);
   glTexParameteri(GL_TEXTURE_2D, param, value);
 }
 
-void gSetTextureWrapU(GTexture texture, int mode) {
-  gSetTextureParam(texture, GL_TEXTURE_WRAP_S, gTranslateTextureWrap(mode));
+void SetTexWrapU(Tex tex, int mode) {
+  SetTexParam(tex, GL_TEXTURE_WRAP_S, ConvTexWrap(mode));
 }
 
-void gSetTextureWrapV(GTexture texture, int mode) {
-  gSetTextureParam(texture, GL_TEXTURE_WRAP_T, gTranslateTextureWrap(mode));
+void SetTexWrapV(Tex tex, int mode) {
+  SetTexParam(tex, GL_TEXTURE_WRAP_T, ConvTexWrap(mode));
 }
 
-void gSetTextureMinFilter(GTexture texture, int filter) {
-  gSetTextureParam(texture, GL_TEXTURE_MIN_FILTER, gTranslateTextureFilter(filter));
+void SetTexMinFilter(Tex tex, int filter) {
+  SetTexParam(tex, GL_TEXTURE_MIN_FILTER, ConvTexFilter(filter));
 }
 
-void gSetTextureMagFilter(GTexture texture, int filter) {
-  gSetTextureParam(texture, GL_TEXTURE_MAG_FILTER, gTranslateTextureFilter(filter));
+void SetTexMagFilter(Tex tex, int filter) {
+  SetTexParam(tex, GL_TEXTURE_MAG_FILTER, ConvTexFilter(filter));
 }
 
-void gPixels(GTexture texture, int width, int height, int* data) {
-  gPixelsEx(texture, width, height, data, width);
+void Pixs(Tex tex, int width, int height, int* data) {
+  PixsEx(tex, width, height, data, width);
 }
 
-void gPixelsEx(GTexture texture, int width, int height, int* data, int stride) {
+void PixsEx(Tex tex, int width, int height, int* data, int stride) {
   int* rgba = 0;
   int x, y;
   for (y = 0; y < height; ++y) {
     for (x = 0; x < width; ++x) {
-      wbArrayAppend(&rgba, G_COLOR(data[y * stride + x]));
+      ArrCat(&rgba, COL(data[y * stride + x]));
     }
   }
-  glBindTexture(GL_TEXTURE_2D, texture->handle);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-    GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-  wbDestroyArray(rgba);
-  texture->width = width;
-  texture->height = height;
+  glBindTexture(GL_TEXTURE_2D, tex->handle);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+  RmArr(rgba);
+  tex->width = width;
+  tex->height = height;
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void gViewport(OSWindow window, int x, int y, int width, int height) {
+void Viewport(Wnd window, int x, int y, int width, int height) {
   /* OpenGL uses a Y axis that starts from the bottom of the window.
    * I flip it because I find it most intuitive that way */
-  glViewport(x, osWindowHeight(window) - y - height, width, height);
+  glViewport(x, WndHeight(window) - y - height, width, height);
   glPushAttrib(GL_TRANSFORM_BIT);
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
@@ -356,16 +351,14 @@ void gViewport(OSWindow window, int x, int y, int width, int height) {
   glPopAttrib();
 }
 
-void gClearColor(int color) {
+void ClsCol(int color) {
   float rgba[4];
-  gColorToFloats(color, rgba);
+  ColToFlts(color, rgba);
   glClearColor(rgba[0], rgba[1], rgba[2], rgba[3]);
 }
 
-void gSwapBuffers(OSWindow window) {
-  osSwapBuffers(window);
-
-  /* this is to avoid having to have an extra function to call at the
-   * beginning of the frame */
+void SwpBufs(Wnd window) {
+  OsSwpBufs(window);
+  /* this is to avoid having to have an extra function to call at the beginning of the frame */
   glClear(GL_COLOR_BUFFER_BIT);
 }

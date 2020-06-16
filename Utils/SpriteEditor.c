@@ -1,33 +1,33 @@
-/* very rough sprite editor, will improve/rewrite as I move features into the engine. this is mainly
+/* very rough sprite ed, will improve/rewrite as I move features into the engine. this is mainly
  * to bootstrap making fonts and simple sprites so I can work on text rendering and ui entirely
  * off my own tools */
 
 #include "WeebCore.c"
 
-char* edHelpString() {
+char* EdHelpString() {
   return (
     "Controls:\n"
     "\n"
     "F1           toggle this help text\n"
     "Ctrl+S       save\n"
-    "Ctrl+1       encode as 1bpp and save as .txt file containing a base64 string of the data.\n"
+    "Ctrl+1       encode as 1bpp and save as .txt file containing a b64 string of the data.\n"
     "             if a selection is active, the output is cropped to the selection\n"
     "Middle Drag  pan around\n"
     "Wheel Up     zoom in\n"
     "Wheel Down   zoom out\n"
     "E            switch to pencil\n"
-    "Left Click   (pencil) draw with color 1\n"
-    "Right Click  (pencil) draw with color 2\n"
-    "C            switch to color picker. press again to expand/collapse. expanded mode lets\n"
-    "             you adjust colors with the ui, non-expanded picks from the pixels you click\n"
-    "Left Click   (color picker) set color 1\n"
-    "Right Click  (color picker) set color 2\n"
+    "Left Click   (pencil) draw with col 1\n"
+    "Right Click  (pencil) draw with col 2\n"
+    "C            switch to col picker. press again to expand/collapse. expanded mode lets\n"
+    "             you adjust cols with the ui, non-expanded picks from the pixels you click\n"
+    "Left Click   (col picker) set col 1\n"
+    "Right Click  (col picker) set col 2\n"
     "S            switch to selection mode\n"
     "Left Drag    (selection) select rectangle\n"
     "R            crop current selection to closest power-of-two size\n"
     "Shift+S      remove selection\n"
-    "1            fill contents of selection with color 1\n"
-    "2            fill contents of selection with color 2\n"
+    "1            fill contents of selection with col 1\n"
+    "2            fill contents of selection with col 2\n"
     "D            cut the contents of the selection. this will attach them to the selection\n"
     "Shift+D      undo cut. puts the contents of the cut back where they were\n"
     "T            (after cutting) paste the contents of the selection at the current location\n"
@@ -64,72 +64,72 @@ enum {
   ED_SELECT_TOP
 };
 
-typedef struct _EDUpdate {
-  int color;
+typedef struct _EDUpd {
+  int col;
   int x, y;
   int flags;
-} EDUpdate;
+} EDUpd;
 
-typedef struct _Editor {
-  OSWindow window;
+typedef struct _Ed {
+  Wnd wnd;
   int flags;
   float oX, oY;
   float flushTimer; /* TODO: built in timer events */
   int scale;
-  int colors[2];
-  int colorIndex;
-  GTexture checkerTexture;
-  GMesh mesh;
-  GTexture texture;
+  int cols[2];
+  int colIndex;
+  Tex checkerTex;
+  Mesh mesh;
+  Tex texture;
   int* textureData;
-  EDUpdate* updates;
-  GTransformBuilder transformBuilder;
-  GTransform transform, transformOrtho;
+  EDUpd* updates;
+  Trans trans;
+  Mat mat, matOrtho;
   int tool;
   int width, height;
-  int lastDrawX, lastDrawY;
+  int lastPutX, lastPutY;
 
-  GFont font;
-  GMesh helpTextMesh, helpBackgroundMesh;
+  Ft font;
+  Mesh helpTextMesh, helpBgMesh;
 
   float selBlinkTimer;
-  GTexture selBorderTexture;
+  Tex selBorderTex;
   float selRect[4];          /* raw rectangle between the cursor and the initial drag position */
   float effectiveSelRect[4]; /* normalized, snapped, etc selection rect */
   int selAnchor;
 
-  GTexture cutTexture;
+  Tex cutTex;
   int* cutData;
   float cutPotRect[4]; /* power of two size of the cut texture */
-  GMesh cutMesh;
-  GTransform cutTransform;
-  GTransformBuilder cutTransformBuilder;
+  Mesh cutMesh;
+  Mat cutMat;
+  Trans cutTrans;
   float cutSourceRect[4]; /* the location from where the cut data was taken */
 
-  /* TODO: pull out color picker as a reusable widget */
-  GMesh colorPickerMesh;
-  GTransformBuilder colorPickerTransformBuilder;
-  GTransform colorPickerTransform;
-  int colorPickerSize;
+  /* TODO: pull out col picker as a reusable widget */
+  Mesh colPickerMesh;
+  Trans colPickerTrans;
+  Mat colPickerMat;
+  int colPickerSize;
   int grey;
-  float colorX, colorY, greyY, alphaY;
+  float colX, colY, greyY, alphaY;
   char* filePath;
-}* Editor;
+}* Ed;
 
-void edMapToTexture(Editor editor, float* point);
-void edFlushUpdates(Editor editor);
-void edResetSelection(Editor editor);
-void edUpdateMesh(Editor editor);
-void edResetPanning(Editor editor);
-void edSelectedRect(Editor editor, float* rect);
-void edResetDrawRateLimiter(Editor editor);
-int edUpdateDrawRateLimiter(Editor editor);
-int edSampleCheckerboard(float x, float y);
-void edDrawPixel(Editor editor, int x, int y, int color, int flags);
+void EdMapToTex(Ed ed, float* point);
+void EdFlushUpds(Ed ed);
+void EdClrSelection(Ed ed);
+void EdUpdMesh(Ed ed);
+void EdClrPanning(Ed ed);
+void EdSelectedRect(Ed ed, float* rect);
+void EdClrPutRateLimiter(Ed ed);
+int EdUpdPutRateLimiter(Ed ed);
+int EdSampleCheckerboard(float x, float y);
+void EdPutPix(Ed ed, int x, int y, int col, int flags);
 
 /* ---------------------------------------------------------------------------------------------- */
 
-/* TODO: do not hardcode color picker coordinates this is so ugly */
+/* TODO: do not hardcode col picker coordinates this is so ugly */
 
 #define CPICK_WIDTH 1.0f
 #define CPICK_HEIGHT 1.0f
@@ -140,112 +140,112 @@ void edDrawPixel(Editor editor, int x, int y, int color, int flags);
 #define CPICK_ABAR_LEFT (CPICK_BBAR_LEFT + CPICK_BAR_WIDTH + CPICK_MARGIN)
 #define CPICK_ABAR_RIGHT (CPICK_ABAR_LEFT + CPICK_BAR_WIDTH)
 
-int edColorPickerSize(Editor editor) {
-  OSWindow window = editor->window;
-  int winSize = wbMin(osWindowWidth(window), osWindowHeight(window));
-  int size = wbRoundUpToPowerOfTwo(winSize / 4);
-  size = wbMax(size, 256);
-  size = wbMin(size, winSize * 0.7);
+int EdColPickerSize(Ed ed) {
+  Wnd wnd = ed->wnd;
+  int winSize = Min(WndWidth(wnd), WndHeight(wnd));
+  int size = RoundUpToPowerOfTwo(winSize / 4);
+  size = Max(size, 256);
+  size = Min(size, winSize * 0.7);
   return size;
 }
 
-GMesh edCreateColorPickerMesh(int grey) {
-  GMesh mesh = gCreateMesh();
-  int colors[7] = { 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
+Mesh EdCreateColPickerMesh(int grey) {
+  Mesh mesh = MkMesh();
+  int cols[7] = { 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
   int brightness[3] = { 0xffffff, 0xff000000, 0x000000 };
   int brightnessSelect[2] = { 0xffffff, 0x000000 };
   int alphaSelect[2] = { 0x00ffffff, 0xff000000 };
   brightness[0] = grey;
-  gQuadGradientH(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 7, colors);
-  gQuadGradientV(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 3, brightness);
-  gQuadGradientV(mesh, CPICK_BBAR_LEFT, 0, CPICK_BAR_WIDTH, CPICK_HEIGHT, 2, brightnessSelect);
-  gQuadGradientV(mesh, CPICK_ABAR_LEFT, 0, CPICK_BAR_WIDTH, CPICK_HEIGHT, 2, alphaSelect);
+  QuadGradH(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 7, cols);
+  QuadGradV(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 3, brightness);
+  QuadGradV(mesh, CPICK_BBAR_LEFT, 0, CPICK_BAR_WIDTH, CPICK_HEIGHT, 2, brightnessSelect);
+  QuadGradV(mesh, CPICK_ABAR_LEFT, 0, CPICK_BAR_WIDTH, CPICK_HEIGHT, 2, alphaSelect);
   return mesh;
 }
 
-void edDrawColorPicker(Editor editor) {
-  float colorsY = 0;
-  GMesh mesh = gCreateMesh();
-  if (editor->flags & ED_FEXPAND_COLOR_PICKER) {
-    colorsY = CPICK_HEIGHT + CPICK_MARGIN;
-    gColor(mesh, gMix(editor->grey, 0xff0000, 0.5));
-    gQuad(mesh, CPICK_BBAR_LEFT, editor->greyY - 1/128.0f, 1/16.0f, 1/64.0f);
-    gColor(mesh, 0x000000);
-    gQuad(mesh, CPICK_ABAR_LEFT, editor->alphaY - 1/128.0f, 1/16.0f, 1/64.0f);
-    gColor(mesh, ~editor->colors[editor->colorIndex] & 0xffffff);
-    gQuad(mesh, editor->colorX - 1/128.0f, editor->colorY - 1/128.0f, 1/64.0f, 1/64.0f);
-    gColor(mesh, 0x000000);
-    gQuad(mesh, editor->colorX - 1/256.0f, editor->colorY - 1/256.0f, 1/128.0f, 1/128.0f);
-    gDrawMesh(editor->colorPickerMesh, editor->colorPickerTransform, 0);
+void EdPutColPicker(Ed ed) {
+  float colsY = 0;
+  Mesh mesh = MkMesh();
+  if (ed->flags & ED_FEXPAND_COLOR_PICKER) {
+    colsY = CPICK_HEIGHT + CPICK_MARGIN;
+    Col(mesh, Mix(ed->grey, 0xff0000, 0.5));
+    Quad(mesh, CPICK_BBAR_LEFT, ed->greyY - 1/128.0f, 1/16.0f, 1/64.0f);
+    Col(mesh, 0x000000);
+    Quad(mesh, CPICK_ABAR_LEFT, ed->alphaY - 1/128.0f, 1/16.0f, 1/64.0f);
+    Col(mesh, ~ed->cols[ed->colIndex] & 0xffffff);
+    Quad(mesh, ed->colX - 1/128.0f, ed->colY - 1/128.0f, 1/64.0f, 1/64.0f);
+    Col(mesh, 0x000000);
+    Quad(mesh, ed->colX - 1/256.0f, ed->colY - 1/256.0f, 1/128.0f, 1/128.0f);
+    PutMesh(ed->colPickerMesh, ed->colPickerMat, 0);
   }
-  gColor(mesh, editor->colors[0]);
-  gQuad(mesh, 0, colorsY         , 1/8.0f, 1/8.0f);
-  gColor(mesh, editor->colors[1]);
-  gQuad(mesh, 0, colorsY + 1/8.0f, 1/8.0f, 1/8.0f);
-  gDrawMesh(mesh, editor->colorPickerTransform, 0);
-  gDestroyMesh(mesh);
+  Col(mesh, ed->cols[0]);
+  Quad(mesh, 0, colsY         , 1/8.0f, 1/8.0f);
+  Col(mesh, ed->cols[1]);
+  Quad(mesh, 0, colsY + 1/8.0f, 1/8.0f, 1/8.0f);
+  PutMesh(mesh, ed->colPickerMat, 0);
+  RmMesh(mesh);
 }
 
-void edSizeColorPicker(Editor editor) {
-  GTransformBuilder tbuilder = editor->colorPickerTransformBuilder;
-  editor->colorPickerSize = edColorPickerSize(editor);
-  gResetTransform(tbuilder);
-  gSetPosition(tbuilder, 10, 10);
-  gSetScale1(tbuilder, editor->colorPickerSize);
-  editor->colorPickerTransform = gBuildTempTransform(tbuilder);
+void EdSizeColPicker(Ed ed) {
+  Trans trans = ed->colPickerTrans;
+  ed->colPickerSize = EdColPickerSize(ed);
+  ClrTrans(trans);
+  SetPos(trans, 10, 10);
+  SetScale1(trans, ed->colPickerSize);
+  ed->colPickerMat = ToTmpMat(trans);
 }
 
-void edUpdateColorPickerMesh(Editor editor) {
-  gDestroyMesh(editor->colorPickerMesh);
-  editor->colorPickerMesh = edCreateColorPickerMesh(editor->grey);
+void EdUpdColPickerMesh(Ed ed) {
+  RmMesh(ed->colPickerMesh);
+  ed->colPickerMesh = EdCreateColPickerMesh(ed->grey);
 }
 
-void edMixPickedColor(Editor editor) {
-  float x = editor->colorX;
-  float y = editor->colorY;
-  int colors[7] = { 0xff0000, 0xffff00, 0x00ff00,
+void EdMixPickEdCol(Ed ed) {
+  float x = ed->colX;
+  float y = ed->colY;
+  int cols[7] = { 0xff0000, 0xffff00, 0x00ff00,
     0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
   int i = (int)(x * 6);
-  int baseColor = gMix(colors[i], colors[i + 1], (x * 6) - i);
-  editor->grey = 0x010101 * (int)((1 - editor->greyY) * 0xff);
+  int baseCol = Mix(cols[i], cols[i + 1], (x * 6) - i);
+  ed->grey = 0x010101 * (int)((1 - ed->greyY) * 0xff);
   if (y <= 0.5f) {
-    editor->colors[editor->colorIndex] = gMix(editor->grey, baseColor, y * 2);
+    ed->cols[ed->colIndex] = Mix(ed->grey, baseCol, y * 2);
   } else {
-    editor->colors[editor->colorIndex] = gMix(baseColor, 0x000000, (y - 0.5f) * 2);
+    ed->cols[ed->colIndex] = Mix(baseCol, 0x000000, (y - 0.5f) * 2);
   }
-  editor->colors[editor->colorIndex] |= (int)(editor->alphaY * 0xff) << 24;
-  edUpdateColorPickerMesh(editor);
+  ed->cols[ed->colIndex] |= (int)(ed->alphaY * 0xff) << 24;
+  EdUpdColPickerMesh(ed);
 }
 
-void edPickColor(Editor editor) {
-  OSWindow window = editor->window;
-  /* TODO: proper inverse transform so window can be moved around n shit */
+void EdPickCol(Ed ed) {
+  Wnd wnd = ed->wnd;
+  /* TODO: proper inverse mat so wnd can be moved around n shit */
   /* TODO: use generic rect intersect funcs */
-  float x = (osMouseX(window) - 10) / (float)editor->colorPickerSize;
-  float y = (osMouseY(window) - 10) / (float)editor->colorPickerSize;
-  if (editor->flags & ED_FEXPAND_COLOR_PICKER) {
+  float x = (MouseX(wnd) - 10) / (float)ed->colPickerSize;
+  float y = (MouseY(wnd) - 10) / (float)ed->colPickerSize;
+  if (ed->flags & ED_FEXPAND_COLOR_PICKER) {
     /* clicked on the grey adjust bar */
     if (y >= 0 && y <= CPICK_HEIGHT && x >= CPICK_BBAR_LEFT && x < CPICK_BBAR_RIGHT) {
-      editor->greyY = y;
+      ed->greyY = y;
     }
     /* clicked on the alpha adjust bar */
     else if (y >= 0 && y <= CPICK_HEIGHT && x >= CPICK_ABAR_LEFT && x < CPICK_ABAR_RIGHT) {
-      editor->alphaY = y;
+      ed->alphaY = y;
     }
-    /* clicked on the color picker */
+    /* clicked on the col picker */
     else if (y >= 0 && y <= CPICK_HEIGHT && x >= 0 && x < CPICK_WIDTH) {
-      editor->colorX = x;
-      editor->colorY = y;
+      ed->colX = x;
+      ed->colY = y;
     }
-    edMixPickedColor(editor);
+    EdMixPickEdCol(ed);
   } else {
     float p[2];
-    p[0] = osMouseX(window);
-    p[1] = osMouseY(window);
-    edMapToTexture(editor, p);
-    if (x >= 0 && x < editor->width && y >= 0 && y < editor->height) {
-      editor->colors[editor->colorIndex] =
-        editor->textureData[(int)p[1] * editor->width + (int)p[0]];
+    p[0] = MouseX(wnd);
+    p[1] = MouseY(wnd);
+    EdMapToTex(ed, p);
+    if (x >= 0 && x < ed->width && y >= 0 && y < ed->height) {
+      ed->cols[ed->colIndex] =
+        ed->textureData[(int)p[1] * ed->width + (int)p[0]];
     }
   }
 }
@@ -253,28 +253,28 @@ void edPickColor(Editor editor) {
 /* ---------------------------------------------------------------------------------------------- */
 
 /* NOTE: this updates rect in place to the adjusted power-of-two size */
-int* edCreatePixelsFromRegion(Editor editor, float* rect) {
+int* EdCreatePixsFromRegion(Ed ed, float* rect) {
   float extents[4];
   int* newData = 0;
   int x, y;
 
   /* commit any pending changes to the current image */
-  if (editor->flags & ED_FDIRTY) {
-    edFlushUpdates(editor);
+  if (ed->flags & ED_FDIRTY) {
+    EdFlushUpds(ed);
   }
 
   /* snap crop rect to the closest power of two sizes */
-  maSetRectSize(rect, wbRoundUpToPowerOfTwo(maRectWidth(rect)),
-    wbRoundUpToPowerOfTwo(maRectHeight(rect)));
+  SetRectSize(rect, RoundUpToPowerOfTwo(RectWidth(rect)),
+    RoundUpToPowerOfTwo(RectHeight(rect)));
 
   /* create cropped pixel data, fill any padding that goes out of the original image with transp */
-  maSetRect(extents, 0, editor->width, 0, editor->height);
-  for (y = maRectTop(rect); y < maRectBottom(rect); ++y) {
-    for (x = maRectLeft(rect); x < maRectRight(rect); ++x) {
-      if (maPtInRect(extents, x, y)) {
-        wbArrayAppend(&newData, editor->textureData[y * editor->width + x]);
+  SetRect(extents, 0, ed->width, 0, ed->height);
+  for (y = RectTop(rect); y < RectBot(rect); ++y) {
+    for (x = RectLeft(rect); x < RectRight(rect); ++x) {
+      if (PtInRect(extents, x, y)) {
+        ArrCat(&newData, ed->textureData[y * ed->width + x]);
       } else {
-        wbArrayAppend(&newData, 0xff000000);
+        ArrCat(&newData, 0xff000000);
       }
     }
   }
@@ -282,33 +282,33 @@ int* edCreatePixelsFromRegion(Editor editor, float* rect) {
   return newData;
 }
 
-void edFillRect(Editor editor, float* rect, int color) {
+void EdFillRect(Ed ed, float* rect, int col) {
   int x, y;
-  if (edUpdateDrawRateLimiter(editor)) {
-    for (y = maRectTop(rect); y < maRectBottom(rect); ++y) {
-      for (x = maRectLeft(rect); x < maRectRight(rect); ++x) {
-        edDrawPixel(editor, x, y, color, 0);
+  if (EdUpdPutRateLimiter(ed)) {
+    for (y = RectTop(rect); y < RectBot(rect); ++y) {
+      for (x = RectLeft(rect); x < RectRight(rect); ++x) {
+        EdPutPix(ed, x, y, col, 0);
       }
     }
   }
 }
 
-void edCrop(Editor editor, float* rect) {
+void EdCrop(Ed ed, float* rect) {
   float potRect[4];
   int* newData;
 
-  osMemCpy(potRect, rect, sizeof(potRect));
-  newData = edCreatePixelsFromRegion(editor, potRect);
+  MemCpy(potRect, rect, sizeof(potRect));
+  newData = EdCreatePixsFromRegion(ed, potRect);
 
   /* refresh everything */
-  wbDestroyArray(editor->textureData);
-  editor->textureData = newData;
-  editor->width = maRectWidth(potRect);
-  editor->height = maRectHeight(potRect);
-  edResetSelection(editor);
-  edUpdateMesh(editor);
-  edFlushUpdates(editor);
-  edResetPanning(editor);
+  RmArr(ed->textureData);
+  ed->textureData = newData;
+  ed->width = RectWidth(potRect);
+  ed->height = RectHeight(potRect);
+  EdClrSelection(ed);
+  EdUpdMesh(ed);
+  EdFlushUpds(ed);
+  EdClrPanning(ed);
 }
 
 /* TODO: clean up this mess, maybe use a generic ui function to draw rectangles with borders */
@@ -317,215 +317,203 @@ void edCrop(Editor editor, float* rect) {
  * 1px border. by using texture coord offsets and messing with the repeat mode, I can reuse the
  * texture to draw all 4 sides of the dashed selection border */
 
-void edDashBorderH(Editor editor, GMesh mesh, float* rect, float off, int color) {
-  float uSize = maRectWidth(rect) * editor->scale;
-  float vSize = maRectHeight(rect) * editor->scale;
-  gColor(mesh, color);
-  gTexturedQuad(
-    mesh,
-    maRectX(rect), maRectY(rect),
-    1 + off, 1,
-    maRectWidth(rect), maRectHeight(rect),
-    uSize, vSize * 2
+void EdDashBorderH(Ed ed, Mesh mesh, float* rect, float off, int col) {
+  float uSize = RectWidth(rect) * ed->scale;
+  float vSize = RectHeight(rect) * ed->scale;
+  Col(mesh, col);
+  TexdQuad(mesh,
+    RectX(rect)    , RectY(rect)     , 1 + off, 1,
+    RectWidth(rect), RectHeight(rect), uSize  , vSize * 2
   );
-  gTexturedQuad(
-    mesh,
-    maRectX(rect), maRectY(rect),
-    1 - off, -vSize * 2 + 2,
-    maRectWidth(rect), maRectHeight(rect),
-    uSize, vSize * 2
+  TexdQuad(mesh,
+    RectX(rect)    , RectY(rect)     , 1 - off, -vSize * 2 + 2,
+    RectWidth(rect), RectHeight(rect), uSize  ,  vSize * 2
   );
 }
 
-void edDashBorderV(Editor editor, GMesh mesh, float* rect, float off, int color) {
-  float uSize = maRectWidth(rect) * editor->scale;
-  float vSize = maRectHeight(rect) * editor->scale;
-  gColor(mesh, color);
-  gTexturedQuad(
-    mesh,
-    maRectX(rect), maRectY(rect),
-    1, 1 - off,
-    maRectWidth(rect), maRectHeight(rect),
-    uSize * 2, vSize
+void EdDashBorderV(Ed ed, Mesh mesh, float* rect, float off, int col) {
+  float uSize = RectWidth(rect) * ed->scale;
+  float vSize = RectHeight(rect) * ed->scale;
+  Col(mesh, col);
+  TexdQuad(mesh,
+    RectX(rect)    , RectY(rect)     , 1        , 1 - off,
+    RectWidth(rect), RectHeight(rect), uSize * 2, vSize
   );
-  gTexturedQuad(
-    mesh,
-    maRectX(rect), maRectY(rect),
-    -uSize * 2 + 2, 1 + off,
-    maRectWidth(rect), maRectHeight(rect),
-    uSize * 2, vSize
+  TexdQuad(mesh,
+    RectX(rect)    , RectY(rect)     , -uSize * 2 + 2, 1 + off,
+    RectWidth(rect), RectHeight(rect),  uSize * 2    , vSize
   );
 }
 
-void edUpdateYank(Editor editor) {
-  if (editor->cutMesh) {
-    GTransformBuilder tbuilder = editor->cutTransformBuilder;
-    float* rect = editor->effectiveSelRect;
-    edSelectedRect(editor, rect);
-    gResetTransform(tbuilder);
-    /* TODO: instead of multiplying by scale everywhere, keep a separate transform for scale? */
-    gSetPosition(tbuilder, maRectX(rect) * editor->scale, maRectY(rect) * editor->scale);
-    editor->cutTransform = gBuildTempTransform(tbuilder);
+void EdUpdYank(Ed ed) {
+  if (ed->cutMesh) {
+    Trans trans = ed->cutTrans;
+    float* rect = ed->effectiveSelRect;
+    EdSelectedRect(ed, rect);
+    ClrTrans(trans);
+    /* TODO: instead of multiplying by scale everywhere, keep a separate mat for scale? */
+    SetPos(trans, RectX(rect) * ed->scale, RectY(rect) * ed->scale);
+    ed->cutMat = ToTmpMat(trans);
   }
 }
 
-void edDiscardYank(Editor editor) {
-  gDestroyMesh(editor->cutMesh);
-  editor->cutMesh = 0;
-  wbDestroyArray(editor->cutData);
-  editor->cutData = 0;
+void EdClrYank(Ed ed) {
+  RmMesh(ed->cutMesh);
+  ed->cutMesh = 0;
+  RmArr(ed->cutData);
+  ed->cutData = 0;
 }
 
-void edResetSelection(Editor editor) {
-  osMemSet(editor->selRect, 0, sizeof(editor->selRect));
-  editor->flags &= ~ED_FSELECT;
-  edDiscardYank(editor);
+void EdClrSelection(Ed ed) {
+  MemSet(ed->selRect, 0, sizeof(ed->selRect));
+  ed->flags &= ~ED_FSELECT;
+  EdClrYank(ed);
 }
 
-void edYank(Editor editor) {
-  float* potRect = editor->cutPotRect;
-  float* rect = editor->effectiveSelRect;
-  if (editor->cutMesh) {
-    edDiscardYank(editor);
+void EdYank(Ed ed) {
+  float* potRect = ed->cutPotRect;
+  float* rect = ed->effectiveSelRect;
+  if (ed->cutMesh) {
+    EdClrYank(ed);
   }
-  osMemCpy(editor->cutSourceRect, rect, sizeof(float) * 4);
-  osMemCpy(potRect, rect, sizeof(float) * 4);
-  editor->cutData = edCreatePixelsFromRegion(editor, potRect);
-  gPixels(editor->cutTexture, maRectWidth(potRect), maRectHeight(potRect), editor->cutData);
-  editor->cutMesh = gCreateMesh();
-  gQuad(editor->cutMesh, 0, 0, maRectWidth(rect), maRectHeight(rect));
-  edFillRect(editor, rect, 0xff000000);
-  edUpdateYank(editor);
+  MemCpy(ed->cutSourceRect, rect, sizeof(float) * 4);
+  MemCpy(potRect, rect, sizeof(float) * 4);
+  ed->cutData = EdCreatePixsFromRegion(ed, potRect);
+  Pixs(ed->cutTex, RectWidth(potRect), RectHeight(potRect), ed->cutData);
+  ed->cutMesh = MkMesh();
+  Quad(ed->cutMesh, 0, 0, RectWidth(rect), RectHeight(rect));
+  EdFillRect(ed, rect, 0xff000000);
+  EdUpdYank(ed);
 }
 
-void edPaste(Editor editor, float* rect, int flags) {
-  if (editor->cutMesh) {
+void EdPaste(Ed ed, float* rect, int flags) {
+  if (ed->cutMesh) {
     int x, y;
-    float* potRect = editor->cutPotRect;
-    int stride = maRectWidth(potRect);
-    for (y = 0; y < wbMin(maRectHeight(potRect), maRectHeight(rect)); ++y) {
-      for (x = 0; x < wbMin(maRectWidth(potRect), maRectWidth(rect)); ++x) {
-        int dx = maRectLeft(rect) + x;
-        int dy = maRectTop(rect) + y;
-        int color = editor->cutData[y * stride + x];
-        edDrawPixel(editor, dx, dy, color, flags);
+    float* potRect = ed->cutPotRect;
+    int stride = RectWidth(potRect);
+    for (y = 0; y < Min(RectHeight(potRect), RectHeight(rect)); ++y) {
+      for (x = 0; x < Min(RectWidth(potRect), RectWidth(rect)); ++x) {
+        int dx = RectLeft(rect) + x;
+        int dy = RectTop(rect) + y;
+        int col = ed->cutData[y * stride + x];
+        EdPutPix(ed, dx, dy, col, flags);
       }
     }
   }
 }
 
-void edUnyank(Editor editor) {
+void EdUnyank(Ed ed) {
   /* paste at start location. no alpha blending to ensure we restore that rect to exactly the state
    * it had when we yanked */
-  edPaste(editor, editor->cutSourceRect, ED_FIGNORE_SELECTION);
-  edDiscardYank(editor);
+  EdPaste(ed, ed->cutSourceRect, ED_FIGNORE_SELECTION);
+  EdClrYank(ed);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void edBeginSelect(Editor editor) {
-  switch (editor->selAnchor) {
+void EdBeginSelect(Ed ed) {
+  switch (ed->selAnchor) {
     case ED_SELECT_NONE: {
       float p[2];
-      edResetSelection(editor);
-      p[0] = osMouseX(editor->window);
-      p[1] = osMouseY(editor->window);
-      edMapToTexture(editor, p);
-      maSetRectLeft(editor->selRect, p[0]);
-      maSetRectTop(editor->selRect, p[1]);
-      maSetRectSize(editor->selRect, 0, 0);
-      editor->flags |= ED_FSELECT;
+      EdClrSelection(ed);
+      p[0] = MouseX(ed->wnd);
+      p[1] = MouseY(ed->wnd);
+      EdMapToTex(ed, p);
+      SetRectLeft(ed->selRect, p[0]);
+      SetRectTop(ed->selRect, p[1]);
+      SetRectSize(ed->selRect, 0, 0);
+      ed->flags |= ED_FSELECT;
       break;
     }
   }
 }
 
-void edSelectedRect(Editor editor, float* rect) {
+void EdSelectedRect(Ed ed, float* rect) {
   float textureRect[4];
   float xoff = 1.5f, yoff = 1.5f;
-  osMemCpy(rect, editor->selRect, sizeof(float) * 4);
-  if (maRectWidth(rect) < 0) xoff *= -1;
-  if (maRectHeight(rect) < 0) yoff *= -1;
-  maSetRectSize(rect, (int)(maRectWidth(rect) + xoff), (int)(maRectHeight(rect) + yoff));
-  maNormalizeRect(rect);
-  maSetRect(textureRect, 0, editor->width, 0, editor->height);
-  maClampRect(rect, textureRect);
-  maFloorFloats(4, rect, rect);
+  MemCpy(rect, ed->selRect, sizeof(float) * 4);
+  if (RectWidth(rect) < 0) xoff *= -1;
+  if (RectHeight(rect) < 0) yoff *= -1;
+  SetRectSize(rect, (int)(RectWidth(rect) + xoff), (int)(RectHeight(rect) + yoff));
+  NormRect(rect);
+  SetRect(textureRect, 0, ed->width, 0, ed->height);
+  ClampRect(rect, textureRect);
+  FloorFlts(4, rect, rect);
 }
 
-void edDrawSelect(Editor editor) {
-  GTexture texture = editor->selBorderTexture;
-  float* rect = editor->effectiveSelRect;
-  GMesh meshH = gCreateMesh();
-  GMesh meshV = gCreateMesh();
-  float off = editor->selBlinkTimer * 2;
+void EdPutSelect(Ed ed) {
+  Tex texture = ed->selBorderTex;
+  float* rect = ed->effectiveSelRect;
+  Mesh meshH = MkMesh();
+  Mesh meshV = MkMesh();
+  float off = ed->selBlinkTimer * 2;
 
   /* draw dashed border that alternates between white and black */
-  edDashBorderH(editor, meshH, rect, off + 0, 0xffffff);
-  edDashBorderH(editor, meshH, rect, off + 2, 0x000000);
-  edDashBorderV(editor, meshV, rect, off + 0, 0xffffff);
-  edDashBorderV(editor, meshV, rect, off + 2, 0x000000);
+  EdDashBorderH(ed, meshH, rect, off + 0, 0xffffff);
+  EdDashBorderH(ed, meshH, rect, off + 2, 0x000000);
+  EdDashBorderV(ed, meshV, rect, off + 0, 0xffffff);
+  EdDashBorderV(ed, meshV, rect, off + 2, 0x000000);
 
-  gSetTextureWrapU(texture, G_REPEAT);
-  gSetTextureWrapV(texture, G_CLAMP_TO_EDGE);
-  gDrawMesh(meshH, editor->transform, texture);
+  SetTexWrapU(texture, REPEAT);
+  SetTexWrapV(texture, CLAMP_TO_EDGE);
+  PutMesh(meshH, ed->mat, texture);
 
-  gSetTextureWrapU(texture, G_CLAMP_TO_EDGE);
-  gSetTextureWrapV(texture, G_REPEAT);
-  gDrawMesh(meshV, editor->transform, texture);
+  SetTexWrapU(texture, CLAMP_TO_EDGE);
+  SetTexWrapV(texture, REPEAT);
+  PutMesh(meshV, ed->mat, texture);
 
-  gDestroyMesh(meshH);
-  gDestroyMesh(meshV);
+  RmMesh(meshH);
+  RmMesh(meshV);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void edBeginDrawing(Editor editor) {
-  switch (editor->tool) {
-    case ED_SELECT: { edBeginSelect(editor); break; }
+void EdBeginPuting(Ed ed) {
+  switch (ed->tool) {
+    case ED_SELECT: { EdBeginSelect(ed); break; }
   }
 }
 
-void edDrawing(Editor editor) {
-  switch (editor->tool) {
+void EdPuting(Ed ed) {
+  switch (ed->tool) {
     case ED_PENCIL: {
-      int color = editor->colors[editor->colorIndex];
+      int col = ed->cols[ed->colIndex];
       float point[2];
-      point[0] = osMouseX(editor->window);
-      point[1] = osMouseY(editor->window);
-      edMapToTexture(editor, point);
-      if (edUpdateDrawRateLimiter(editor)) {
+      point[0] = MouseX(ed->wnd);
+      point[1] = MouseY(ed->wnd);
+      EdMapToTex(ed, point);
+      if (EdUpdPutRateLimiter(ed)) {
         /* alpha blend unless we're deleting the pixel with complete transparency */
-        edDrawPixel(editor, (int)point[0], (int)point[1], color,
-          ((color & 0xff000000) == 0xff000000) ? 0 : ED_FALPHA_BLEND);
+        EdPutPix(ed, (int)point[0], (int)point[1], col,
+          ((col & 0xff000000) == 0xff000000) ? 0 : ED_FALPHA_BLEND);
       }
       break;
     }
     case ED_COLOR_PICKER: {
-      edPickColor(editor);
+      EdPickCol(ed);
       break;
     }
     /* TODO: not sure if select dragging belongs here */
     case ED_SELECT: {
-      switch (editor->selAnchor) {
+      switch (ed->selAnchor) {
         case ED_SELECT_NONE: {
           float p[2];
-          p[0] = osMouseX(editor->window);
-          p[1] = osMouseY(editor->window);
-          edMapToTexture(editor, p);
-          maSetRectRight(editor->selRect, p[0]);
-          maSetRectBottom(editor->selRect, p[1]);
+          p[0] = MouseX(ed->wnd);
+          p[1] = MouseY(ed->wnd);
+          EdMapToTex(ed, p);
+          SetRectRight(ed->selRect, p[0]);
+          SetRectBot(ed->selRect, p[1]);
           break;
         }
         case ED_SELECT_MID: {
-          float* rect = editor->selRect;
-          maSetRectPos(rect,
-            maRectX(rect) + osMouseDX(editor->window) / (float)editor->scale,
-            maRectY(rect) + osMouseDY(editor->window) / (float)editor->scale);
-          if (editor->cutMesh) {
-            edUpdateYank(editor);
+          float* rect = ed->selRect;
+          SetRectPos(rect,
+            RectX(rect) + MouseDX(ed->wnd) / (float)ed->scale,
+            RectY(rect) + MouseDY(ed->wnd) / (float)ed->scale);
+          if (ed->cutMesh) {
+            EdUpdYank(ed);
           } else {
-            edSelectedRect(editor, editor->effectiveSelRect);
+            EdSelectedRect(ed, ed->effectiveSelRect);
           }
           break;
         }
@@ -534,471 +522,471 @@ void edDrawing(Editor editor) {
   }
 }
 
-void edUpdateTransform(Editor editor) {
-  GTransformBuilder tbuilder = editor->transformBuilder;
-  gResetTransform(tbuilder);
-  gSetPosition(tbuilder, editor->oX, editor->oY);
-  gSetScale1(tbuilder, editor->scale);
-  editor->transform = gBuildTempTransform(tbuilder);
-  editor->transformOrtho = gBuildTempTransformOrtho(tbuilder);
-  edUpdateYank(editor);
+void EdUpdTrans(Ed ed) {
+  Trans trans = ed->trans;
+  ClrTrans(trans);
+  SetPos(trans, ed->oX, ed->oY);
+  SetScale1(trans, ed->scale);
+  ed->mat = ToTmpMat(trans);
+  ed->matOrtho = ToTmpMatOrtho(trans);
+  EdUpdYank(ed);
 }
 
-void edResetPanning(Editor editor) {
-  editor->oX = 100;
-  editor->oY = 100;
-  edUpdateTransform(editor);
+void EdClrPanning(Ed ed) {
+  ed->oX = 100;
+  ed->oY = 100;
+  EdUpdTrans(ed);
 }
 
-void edUpdateMesh(Editor editor) {
-  gDestroyMesh(editor->mesh);
-  editor->mesh = gCreateMesh();
-  gQuad(editor->mesh, 0, 0, editor->width, editor->height);
+void EdUpdMesh(Ed ed) {
+  RmMesh(ed->mesh);
+  ed->mesh = MkMesh();
+  Quad(ed->mesh, 0, 0, ed->width, ed->height);
 }
 
-void edMapToTexture(Editor editor, float* point) {
-  /* un-transform mouse coordinates so they are relative to the texture */
-  gInverseTransformPoint(editor->transformOrtho, point);
-  point[0] /= editor->scale;
-  point[1] /= editor->scale;
+void EdMapToTex(Ed ed, float* point) {
+  /* un-mat mouse coordinates so they are relative to the texture */
+  InvTransPt(ed->matOrtho, point);
+  point[0] /= ed->scale;
+  point[1] /= ed->scale;
 }
 
-void edChangeScale(Editor editor, int direction) {
+void EdChangeScale(Ed ed, int direction) {
   float p[2];
-  float newScale = editor->scale + direction * (editor->scale / 8 + 1);
-  newScale = wbMin(32, newScale);
-  newScale = wbMax(1, newScale);
-  p[0] = osMouseX(editor->window);
-  p[1] = osMouseY(editor->window);
-  edMapToTexture(editor, p);
+  float newScale = ed->scale + direction * (ed->scale / 8 + 1);
+  newScale = Min(32, newScale);
+  newScale = Max(1, newScale);
+  p[0] = MouseX(ed->wnd);
+  p[1] = MouseY(ed->wnd);
+  EdMapToTex(ed, p);
   /* adjust panning so the pixel we're pointing stays under the cursor */
-  editor->oX -= (int)((p[0] * newScale) - (p[0] * editor->scale));
-  editor->oY -= (int)((p[1] * newScale) - (p[1] * editor->scale));
-  editor->scale = newScale;
-  edUpdateTransform(editor);
+  ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale));
+  ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale));
+  ed->scale = newScale;
+  EdUpdTrans(ed);
 }
 
-void edSave(Editor editor) {
+void EdSave(Ed ed) {
   char* spr;
-  edFlushUpdates(editor);
-  spr = wbARGBToSprArray(editor->textureData, editor->width, editor->height);
-  osWriteEntireFile(editor->filePath, spr, wbArrayLen(spr));
-  wbDestroyArray(spr);
+  EdFlushUpds(ed);
+  spr = ArgbToSprArr(ed->textureData, ed->width, ed->height);
+  WriteFile(ed->filePath, spr, ArrLen(spr));
+  RmArr(spr);
 }
 
-void edSave1BPP(Editor editor) {
+void EdSaveOneBpp(Ed ed) {
   char* data;
-  char* base64Data;
+  char* b64Data;
   char* path = 0;
-  if (editor->flags & ED_FSELECT) {
+  if (ed->flags & ED_FSELECT) {
     int x, y;
-    float* rect = editor->effectiveSelRect;
+    float* rect = ed->effectiveSelRect;
     int* crop = 0;
-    for (y = maRectTop(rect); y < maRectBottom(rect); ++y) {
-      for (x = maRectLeft(rect); x < maRectRight(rect); ++x) {
-        wbArrayAppend(&crop, editor->textureData[y * editor->width + x]);
+    for (y = RectTop(rect); y < RectBot(rect); ++y) {
+      for (x = RectLeft(rect); x < RectRight(rect); ++x) {
+        ArrCat(&crop, ed->textureData[y * ed->width + x]);
       }
     }
-    data = gARGBArrayTo1BPP(crop);
-    wbDestroyArray(crop);
+    data = ArgbArrToOneBpp(crop);
+    RmArr(crop);
   } else {
-    data = gARGBArrayTo1BPP(editor->textureData);
+    data = ArgbArrToOneBpp(ed->textureData);
   }
-  base64Data = wbArrayToBase64(data);
-  wbDestroyArray(data);
-  wbArrayStrCat(&path, editor->filePath);
-  wbArrayStrCat(&path, ".txt");
-  osWriteEntireFile(path, base64Data, wbStrLen(base64Data));
-  wbDestroyArray(path);
-  osFree(base64Data);
+  b64Data = ArrToB64(data);
+  RmArr(data);
+  ArrStrCat(&path, ed->filePath);
+  ArrStrCat(&path, ".txt");
+  WriteFile(path, b64Data, StrLen(b64Data));
+  RmArr(path);
+  Free(b64Data);
 }
 
-void edLoad(Editor editor) {
-  WBSpr spr = wbCreateSprFromFile(editor->filePath);
+void EdLoad(Ed ed) {
+  Spr spr = MkSprFromFile(ed->filePath);
   if (spr) {
-    edFlushUpdates(editor);
-    wbDestroyArray(editor->textureData);
-    editor->textureData = wbSprToARGBArray(spr);
-    editor->width = wbSprWidth(spr);
-    editor->height = wbSprHeight(spr);
-    edUpdateMesh(editor);
-    wbDestroySpr(spr);
-    edFlushUpdates(editor);
+    EdFlushUpds(ed);
+    RmArr(ed->textureData);
+    ed->textureData = SprToArgbArr(spr);
+    ed->width = SprWidth(spr);
+    ed->height = SprHeight(spr);
+    EdUpdMesh(ed);
+    RmSpr(spr);
+    EdFlushUpds(ed);
   }
 }
 
-void edHandleKeyDown(Editor editor, int key, int state) {
+void EdHandleKeyDown(Ed ed, int key, int state) {
   switch (key) {
-    case OS_MMID: { editor->flags |= ED_FDRAGGING; break; }
-    case OS_C: {
-      if (editor->tool == ED_COLOR_PICKER) {
-        editor->flags ^= ED_FEXPAND_COLOR_PICKER;
+    case MMID: { ed->flags |= ED_FDRAGGING; break; }
+    case C: {
+      if (ed->tool == ED_COLOR_PICKER) {
+        ed->flags ^= ED_FEXPAND_COLOR_PICKER;
       } else {
-        editor->tool = ED_COLOR_PICKER;
+        ed->tool = ED_COLOR_PICKER;
       }
       break;
     }
-    case OS_E: { editor->tool = ED_PENCIL; break; }
-    case OS_S: {
-      if (state & OS_FCTRL) {
-        edSave(editor);
-      } else if (state & OS_FSHIFT) {
-        edResetSelection(editor);
+    case E: { ed->tool = ED_PENCIL; break; }
+    case S: {
+      if (state & FCTRL) {
+        EdSave(ed);
+      } else if (state & FSHIFT) {
+        EdClrSelection(ed);
       } else {
-        editor->tool = ED_SELECT;
+        ed->tool = ED_SELECT;
       }
       break;
     }
-    case OS_R: {
-      if (editor->flags & ED_FSELECT) {
-        edCrop(editor, editor->effectiveSelRect);
+    case R: {
+      if (ed->flags & ED_FSELECT) {
+        EdCrop(ed, ed->effectiveSelRect);
       }
       break;
     }
-    case OS_1: {
-      if (state & OS_FCTRL) {
-        edSave1BPP(editor);
+    case K1: {
+      if (state & FCTRL) {
+        EdSaveOneBpp(ed);
       } else {
-        edFillRect(editor, editor->effectiveSelRect, editor->colors[0]);
+        EdFillRect(ed, ed->effectiveSelRect, ed->cols[0]);
       }
       break;
     }
-    case OS_2: { edFillRect(editor, editor->effectiveSelRect, editor->colors[1]); break; }
-    case OS_D: {
-      if (state & OS_FSHIFT) {
-        edUnyank(editor);
+    case K2: { EdFillRect(ed, ed->effectiveSelRect, ed->cols[1]); break; }
+    case D: {
+      if (state & FSHIFT) {
+        EdUnyank(ed);
       } else {
-        edYank(editor);
+        EdYank(ed);
       }
       break;
     }
-    case OS_T: {
-      if (edUpdateDrawRateLimiter(editor)) {
-        edPaste(editor, editor->effectiveSelRect, ED_FALPHA_BLEND);
+    case T: {
+      if (EdUpdPutRateLimiter(ed)) {
+        EdPaste(ed, ed->effectiveSelRect, ED_FALPHA_BLEND);
       }
       break;
     }
-    case OS_MWHEELUP: { edChangeScale(editor, 1); break; }
-    case OS_MWHEELDOWN: { edChangeScale(editor, -1); break; }
-    case OS_MLEFT:
-    case OS_MRIGHT: {
-      edResetDrawRateLimiter(editor);
-      editor->flags |= ED_FDRAWING;
-      editor->colorIndex = key == OS_MRIGHT ? 1 : 0;
-      editor->selAnchor = key == OS_MRIGHT ? ED_SELECT_MID : ED_SELECT_NONE;
-      edBeginDrawing(editor);
-      edDrawing(editor);
-      edFlushUpdates(editor);
+    case MWHEELUP: { EdChangeScale(ed, 1); break; }
+    case MWHEELDOWN: { EdChangeScale(ed, -1); break; }
+    case MLEFT:
+    case MRIGHT: {
+      EdClrPutRateLimiter(ed);
+      ed->flags |= ED_FDRAWING;
+      ed->colIndex = key == MRIGHT ? 1 : 0;
+      ed->selAnchor = key == MRIGHT ? ED_SELECT_MID : ED_SELECT_NONE;
+      EdBeginPuting(ed);
+      EdPuting(ed);
+      EdFlushUpds(ed);
       break;
     }
-    case OS_F1: {
-      editor->flags ^= ED_FHELP;
+    case F1: {
+      ed->flags ^= ED_FHELP;
       break;
     }
   }
 }
 
-void edHandleKeyUp(Editor editor, int key) {
+void EdHandleKeyUp(Ed ed, int key) {
   switch (key) {
-    case OS_MMID: { editor->flags &= ~ED_FDRAGGING; break; }
-    case OS_MLEFT:
-    case OS_MRIGHT: { editor->flags &= ~ED_FDRAWING; break; }
+    case MMID: { ed->flags &= ~ED_FDRAGGING; break; }
+    case MLEFT:
+    case MRIGHT: { ed->flags &= ~ED_FDRAWING; break; }
   }
 }
 
-int edHandleMessage(Editor editor) {
-  OSWindow window = editor->window;
-  switch (osMessageType(window)) {
-    case OS_SIZE: {
-      edSizeColorPicker(editor);
+int EdHandleMsg(Ed ed) {
+  Wnd wnd = ed->wnd;
+  switch (MsgType(wnd)) {
+    case SIZE: {
+      EdSizeColPicker(ed);
       break;
     }
-    case OS_KEYDOWN: {
-      edHandleKeyDown(editor, osKey(window), osKeyState(editor->window));
+    case KEYDOWN: {
+      EdHandleKeyDown(ed, Key(wnd), KeyState(ed->wnd));
       break;
     }
-    case OS_KEYUP: { edHandleKeyUp(editor, osKey(window)); break; }
-    case OS_MOTION: {
-      int flags = editor->flags;
+    case KEYUP: { EdHandleKeyUp(ed, Key(wnd)); break; }
+    case MOTION: {
+      int flags = ed->flags;
       if (flags & ED_FDRAGGING) {
-        editor->oX += osMouseDX(window);
-        editor->oY += osMouseDY(window);
-        edUpdateTransform(editor);
+        ed->oX += MouseDX(wnd);
+        ed->oY += MouseDY(wnd);
+        EdUpdTrans(ed);
       }
-      if (flags & ED_FDRAWING) { edDrawing(editor); }
+      if (flags & ED_FDRAWING) { EdPuting(ed); }
       break;
     }
-    case OS_QUIT: { return 0; }
+    case QUIT: { return 0; }
   }
   return 1;
 }
 
-void edUpdate(Editor editor) {
-  OSWindow window = editor->window;
-  if (editor->flags & ED_FDIRTY) {
-    editor->flushTimer += osDeltaTime(window);
+void EdUpd(Ed ed) {
+  Wnd wnd = ed->wnd;
+  if (ed->flags & ED_FDIRTY) {
+    ed->flushTimer += Delta(wnd);
     /* flush updates periodically or if there's too many queued */
-    if (editor->flushTimer > ED_FLUSH_TIME || wbArrayLen(editor->updates) > ED_FLUSH_THRESHOLD) {
-      edFlushUpdates(editor);
-      editor->flushTimer = wbMax(0, editor->flushTimer - ED_FLUSH_TIME);
+    if (ed->flushTimer > ED_FLUSH_TIME || ArrLen(ed->updates) > ED_FLUSH_THRESHOLD) {
+      EdFlushUpds(ed);
+      ed->flushTimer = Max(0, ed->flushTimer - ED_FLUSH_TIME);
     }
   } else {
-    editor->flushTimer = 0;
+    ed->flushTimer = 0;
   }
 
-  editor->selBlinkTimer += osDeltaTime(editor->window);
-  editor->selBlinkTimer = maFloatMod(editor->selBlinkTimer, 2);
+  ed->selBlinkTimer += Delta(ed->wnd);
+  ed->selBlinkTimer = FltMod(ed->selBlinkTimer, 2);
 
-  edSelectedRect(editor, editor->effectiveSelRect);
+  EdSelectedRect(ed, ed->effectiveSelRect);
 }
 
-void edDrawPixel(Editor editor, int x, int y, int color, int flags) {
+void EdPutPix(Ed ed, int x, int y, int col, int flags) {
   float rect[4];
-  int fcolor = color;
-  maSetRect(rect, 0, editor->width, 0, editor->height);
-  if ((editor->flags & ED_FSELECT) && !(flags & ED_FIGNORE_SELECTION)) {
-    maClampRect(rect, editor->effectiveSelRect);
+  int fcol = col;
+  SetRect(rect, 0, ed->width, 0, ed->height);
+  if ((ed->flags & ED_FSELECT) && !(flags & ED_FIGNORE_SELECTION)) {
+    ClampRect(rect, ed->effectiveSelRect);
   }
-  if (maPtInRect(rect, x, y)) {
-    int* px = &editor->textureData[y * editor->width + x];
+  if (PtInRect(rect, x, y)) {
+    int* px = &ed->textureData[y * ed->width + x];
     if (flags & ED_FALPHA_BLEND) {
       /* normal alpha blending with whatever is currently here */
-      fcolor = gAlphaBlend(color, *px);
+      fcol = AlphaBlend(col, *px);
     }
-    if (*px != fcolor) {
-      EDUpdate* u;
-      *px = fcolor;
-      u = wbArrayAlloc(&editor->updates, 1);
+    if (*px != fcol) {
+      EDUpd* u;
+      *px = fcol;
+      u = ArrAlloc(&ed->updates, 1);
       u->x = x;
       u->y = y;
-      u->color = color;
+      u->col = col;
       u->flags = flags;
-      editor->flags |= ED_FDIRTY;
+      ed->flags |= ED_FDIRTY;
     }
   }
 }
 
-void edFlushUpdates(Editor editor) {
-  gPixels(editor->texture, editor->width, editor->height,
-    editor->textureData);
-  wbSetArrayLen(editor->updates, 0);
-  editor->flags &= ~ED_FDIRTY;
+void EdFlushUpds(Ed ed) {
+  Pixs(ed->texture, ed->width, ed->height, ed->textureData);
+  SetArrLen(ed->updates, 0);
+  ed->flags &= ~ED_FDIRTY;
 }
 
-void edResetDrawRateLimiter(Editor editor) {
-  editor->lastDrawX = -1;
+void EdClrPutRateLimiter(Ed ed) {
+  ed->lastPutX = -1;
 }
 
-int edUpdateDrawRateLimiter(Editor editor) {
+int EdUpdPutRateLimiter(Ed ed) {
   float p[2];
   int x, y;
-  p[0] = osMouseX(editor->window);
-  p[1] = osMouseY(editor->window);
-  edMapToTexture(editor, p);
+  p[0] = MouseX(ed->wnd);
+  p[1] = MouseY(ed->wnd);
+  EdMapToTex(ed, p);
   x = (int)p[0];
   y = (int)p[1];
-  if (x != editor->lastDrawX || y != editor->lastDrawY) {
-    editor->lastDrawX = x;
-    editor->lastDrawY = y;
+  if (x != ed->lastPutX || y != ed->lastPutY) {
+    ed->lastPutX = x;
+    ed->lastPutY = y;
     return 1;
   }
   return 0;
 }
 
-void edDrawUpdates(Editor editor) {
+void EdPutUpds(Ed ed) {
   int i;
-  GMesh mesh = gCreateMesh();
-  EDUpdate* updates = editor->updates;
-  for (i = 0; i < wbArrayLen(updates); ++i) {
-    EDUpdate* u = &updates[i];
+  Mesh mesh = MkMesh();
+  EDUpd* updates = ed->updates;
+  for (i = 0; i < ArrLen(updates); ++i) {
+    EDUpd* u = &updates[i];
     if (u->flags & ED_FALPHA_BLEND) {
       /* normal alpha blending with whatever is currently here */
-      gColor(mesh, u->color);
+      Col(mesh, u->col);
     } else {
-      /* no alpha blending, just overwrite the color.
+      /* no alpha blending, just overwrite the col.
        * because we can have pending transparent pixels we need to do some big brain custom alpha
-       * blending with the checkerboard color at this location */
-      int baseColor = edSampleCheckerboard(u->x, u->y);
+       * blending with the checkerboard col at this location */
+      int baseCol = EdSampleCheckerboard(u->x, u->y);
       float rgba[4];
-      gColorToFloats(u->color, rgba);
-      gColor(mesh, gMix(u->color & 0xffffff, baseColor, rgba[3]));
+      ColToFlts(u->col, rgba);
+      Col(mesh, Mix(u->col & 0xffffff, baseCol, rgba[3]));
     }
-    gQuad(mesh, u->x, u->y, 1, 1);
+    Quad(mesh, u->x, u->y, 1, 1);
   }
-  gDrawMesh(mesh, editor->transform, 0);
-  gDestroyMesh(mesh);
+  PutMesh(mesh, ed->mat, 0);
+  RmMesh(mesh);
 }
 
 /* cover rest of the area in grey to distinguish it from a transparent image */
-void edDrawBorders(Editor editor) {
-  /* TODO: only regenerate mesh when the transform changes */
-  int winWidth = osWindowWidth(editor->window);
-  int winHeight = osWindowHeight(editor->window);
+void EdPutBorders(Ed ed) {
+  /* TODO: only regenerate mesh when the mat changes */
+  int winWidth = WndWidth(ed->wnd);
+  int winHeight = WndHeight(ed->wnd);
   int right, bottom;
-  int oX = (int)editor->oX, oY = (int)editor->oY;
-  int scaledWidth = editor->width * editor->scale;
-  int scaledHeight = editor->height * editor->scale;
-  GMesh mesh = gCreateMesh();
-  gColor(mesh, 0x111111);
+  int oX = (int)ed->oX, oY = (int)ed->oY;
+  int scalEdWidth = ed->width * ed->scale;
+  int scalEdHeight = ed->height * ed->scale;
+  Mesh mesh = MkMesh();
+  Col(mesh, 0x111111);
   if (oX > 0) {
-    gQuad(mesh, 0, 0, oX, winHeight);
+    Quad(mesh, 0, 0, oX, winHeight);
   }
-  right = oX + scaledWidth;
+  right = oX + scalEdWidth;
   if (right < winWidth) {
-    gQuad(mesh, right, 0, winWidth - right, winHeight);
+    Quad(mesh, right, 0, winWidth - right, winHeight);
   }
-  bottom = oY + scaledHeight;
+  bottom = oY + scalEdHeight;
   if (oY > 0) {
-    gQuad(mesh, 0, 0, winWidth, oY);
+    Quad(mesh, 0, 0, winWidth, oY);
   }
   if (bottom < winHeight) {
-    gQuad(mesh, oX, bottom, scaledWidth, winHeight - bottom);
+    Quad(mesh, oX, bottom, scalEdWidth, winHeight - bottom);
   }
-  gDrawMesh(mesh, 0, 0);
-  gDestroyMesh(mesh);
+  PutMesh(mesh, 0, 0);
+  RmMesh(mesh);
 }
 
-void edDraw(Editor editor) {
-  gDrawMesh(editor->mesh, editor->transform, editor->checkerTexture);
-  gDrawMesh(editor->mesh, editor->transform, editor->texture);
-  edDrawBorders(editor);
-  edDrawUpdates(editor);
-  if (editor->cutMesh) {
-    GTransform copy = gCloneTransform(editor->cutTransform);
-    gMultiplyTransform(copy, editor->transform);
-    gDrawMesh(editor->cutMesh, copy, editor->cutTexture);
-    gDestroyTransform(copy);
+void EdPut(Ed ed) {
+  PutMesh(ed->mesh, ed->mat, ed->checkerTex);
+  PutMesh(ed->mesh, ed->mat, ed->texture);
+  EdPutBorders(ed);
+  EdPutUpds(ed);
+  if (ed->cutMesh) {
+    Mat copy = DupMat(ed->cutMat);
+    MulMat(copy, ed->mat);
+    PutMesh(ed->cutMesh, copy, ed->cutTex);
+    RmMat(copy);
   }
-  if (editor->flags & ED_FSELECT) {
-    edDrawSelect(editor);
+  if (ed->flags & ED_FSELECT) {
+    EdPutSelect(ed);
   }
-  if (editor->tool == ED_COLOR_PICKER) {
-    edDrawColorPicker(editor);
+  if (ed->tool == ED_COLOR_PICKER) {
+    EdPutColPicker(ed);
   }
-  if (editor->flags & ED_FHELP) {
-    gDrawMesh(editor->helpBackgroundMesh, 0, 0);
-    gDrawMesh(editor->helpTextMesh, 0, gFontTexture(editor->font));
+  if (ed->flags & ED_FHELP) {
+    PutMesh(ed->helpBgMesh, 0, 0);
+    PutMesh(ed->helpTextMesh, 0, FtTex(ed->font));
   }
-  gSwapBuffers(editor->window);
+  SwpBufs(ed->wnd);
 }
 
-OSWindow edCreateWindow() {
-  OSWindow window = osCreateWindow();
-  osSetWindowClass(window, "WeebCoreSpriteEditor");
-  osSetWindowName(window, "WeebCore Sprite Editor");
-  return window;
+Wnd EdCreateWnd() {
+  Wnd wnd = MkWnd();
+  SetWndClass(wnd, "WeebCoreSpriteEd");
+  SetWndName(wnd, "WeebCore Sprite Ed");
+  return wnd;
 }
 
-int edSampleCheckerboard(float x, float y) {
+int EdSampleCheckerboard(float x, float y) {
   int data[4] = { 0xaaaaaa, 0x666666, 0x666666, 0xaaaaaa };
   x /= ED_CHECKER_SIZE;
   y /= ED_CHECKER_SIZE;
   return data[((int)y % 2) * 2 + ((int)x % 2)];
 }
 
-GTexture edCreateCheckerTexture() {
+Tex EdCreateCheckerTex() {
   int x, y;
   int* data = 0;
-  GTexture texture = gCreateTexture();
+  Tex texture = MkTex();
   for (y = 0; y < ED_CHECKER_SIZE * 2; ++y) {
     for (x = 0; x < ED_CHECKER_SIZE * 2; ++x) {
-      wbArrayAppend(&data, edSampleCheckerboard(x, y));
+      ArrCat(&data, EdSampleCheckerboard(x, y));
     }
   }
-  gPixels(texture, ED_CHECKER_SIZE * 2, ED_CHECKER_SIZE * 2, data);
-  wbDestroyArray(data);
+  Pixs(texture, ED_CHECKER_SIZE * 2, ED_CHECKER_SIZE * 2, data);
+  RmArr(data);
   return texture;
 }
 
-GTexture edCreateSelBorderTexture() {
-  GTexture texture = gCreateTexture();
+Tex EdCreateSelBorderTex() {
+  Tex texture = MkTex();
   int data[4*4] = {
     0xff000000, 0xff000000, 0xff000000, 0xff000000,
     0xff000000, 0x00ffffff, 0x00ffffff, 0xff000000,
     0xff000000, 0x00ffffff, 0x00ffffff, 0xff000000,
     0xff000000, 0xff000000, 0xff000000, 0xff000000
   };
-  gPixels(texture, 4, 4, data);
+  Pixs(texture, 4, 4, data);
   return texture;
 }
 
-int* edCreatePixels(int fillColor, int width, int height) {
+int* EdCreatePixs(int fillCol, int width, int height) {
   int i;
   int* data = 0;
   for (i = 0; i < width * height; ++i) {
-    wbArrayAppend(&data, fillColor);
+    ArrCat(&data, fillCol);
   }
   return data;
 }
 
-GTransform edCreateBackgroundTransform() {
-  GTransform transform = gCreateTransform();
-  gScale1(transform, ED_CHECKER_SIZE);
-  return transform;
+Mat EdCreateBgTrans() {
+  Mat mat = MkMat();
+  Scale1(mat, ED_CHECKER_SIZE);
+  return mat;
 }
 
-Editor edCreate(char* filePath) {
-  Editor editor = osAlloc(sizeof(struct _Editor));
-  editor->scale = 4;
-  editor->window = edCreateWindow();
-  editor->checkerTexture = edCreateCheckerTexture();
-  editor->texture = gCreateTexture();
-  editor->cutTexture = gCreateTexture();
-  editor->width = ED_TEXSIZE;
-  editor->height = ED_TEXSIZE;
-  editor->textureData = edCreatePixels(0xff000000, editor->width, editor->height);
-  editor->transformBuilder = gCreateTransformBuilder();
-  editor->colorPickerTransformBuilder = gCreateTransformBuilder();
-  editor->cutTransformBuilder = gCreateTransformBuilder();
-  editor->tool = ED_PENCIL;
-  editor->grey = 0xffffff;
-  editor->colors[1] = 0xff000000;
-  editor->filePath = filePath ? filePath : "out.wbspr";
-  editor->selBorderTexture = edCreateSelBorderTexture();
+Ed EdCreate(char* filePath) {
+  Ed ed = Alloc(sizeof(struct _Ed));
+  ed->scale = 4;
+  ed->wnd = EdCreateWnd();
+  ed->checkerTex = EdCreateCheckerTex();
+  ed->texture = MkTex();
+  ed->cutTex = MkTex();
+  ed->width = ED_TEXSIZE;
+  ed->height = ED_TEXSIZE;
+  ed->textureData = EdCreatePixs(0xff000000, ed->width, ed->height);
+  ed->trans = MkTrans();
+  ed->colPickerTrans = MkTrans();
+  ed->cutTrans = MkTrans();
+  ed->tool = ED_PENCIL;
+  ed->grey = 0xffffff;
+  ed->cols[1] = 0xff000000;
+  ed->filePath = filePath ? filePath : "out.wbspr";
+  ed->selBorderTex = EdCreateSelBorderTex();
 
-  editor->flags |= ED_FHELP;
-  editor->font = gDefaultFont();
+  ed->flags |= ED_FHELP;
+  ed->font = DefFt();
   /* TODO: scale with screen size */
   /* TODO: actual proper automatic ui layoutting */
-  editor->helpTextMesh = gCreateMesh();
-  gColor(editor->helpTextMesh, 0xbebebe);
-  gFont(editor->helpTextMesh, editor->font, 15, 15, edHelpString());
-  editor->helpBackgroundMesh = gCreateMesh();
-  gColor(editor->helpBackgroundMesh, 0x33000000);
-  gQuad(editor->helpBackgroundMesh, 5, 5, 610, 290);
+  ed->helpTextMesh = MkMesh();
+  Col(ed->helpTextMesh, 0xbebebe);
+  FtMesh(ed->helpTextMesh, ed->font, 15, 15, EdHelpString());
+  ed->helpBgMesh = MkMesh();
+  Col(ed->helpBgMesh, 0x33000000);
+  Quad(ed->helpBgMesh, 5, 5, 610, 290);
 
-  edResetSelection(editor);
-  edUpdateColorPickerMesh(editor);
-  edUpdateMesh(editor);
-  edFlushUpdates(editor);
-  edSizeColorPicker(editor);
-  edResetPanning(editor);
-  edLoad(editor);
+  EdClrSelection(ed);
+  EdUpdColPickerMesh(ed);
+  EdUpdMesh(ed);
+  EdFlushUpds(ed);
+  EdSizeColPicker(ed);
+  EdClrPanning(ed);
+  EdLoad(ed);
 
-  return editor;
+  return ed;
 }
 
-void edDestroy(Editor editor) {
-  if (editor) {
-    edDiscardYank(editor);
-    edResetSelection(editor);
-    osDestroyWindow(editor->window);
-    gDestroyMesh(editor->cutMesh);
-    gDestroyMesh(editor->mesh);
-    gDestroyMesh(editor->colorPickerMesh);
-    gDestroyMesh(editor->helpTextMesh);
-    wbDestroyArray(editor->textureData);
-    wbDestroyArray(editor->updates);
-    gDestroyTexture(editor->texture);
-    gDestroyTexture(editor->cutTexture);
-    gDestroyTexture(editor->checkerTexture);
-    gDestroyTexture(editor->selBorderTexture);
-    gDestroyTransformBuilder(editor->transformBuilder);
-    gDestroyTransformBuilder(editor->colorPickerTransformBuilder);
-    gDestroyTransformBuilder(editor->cutTransformBuilder);
-    gDestroyFont(editor->font);
+void RmEd(Ed ed) {
+  if (ed) {
+    EdClrYank(ed);
+    EdClrSelection(ed);
+    RmWnd(ed->wnd);
+    RmMesh(ed->cutMesh);
+    RmMesh(ed->mesh);
+    RmMesh(ed->colPickerMesh);
+    RmMesh(ed->helpTextMesh);
+    RmMesh(ed->helpBgMesh);
+    RmArr(ed->textureData);
+    RmArr(ed->updates);
+    RmTex(ed->texture);
+    RmTex(ed->cutTex);
+    RmTex(ed->checkerTex);
+    RmTex(ed->selBorderTex);
+    RmTrans(ed->trans);
+    RmTrans(ed->colPickerTrans);
+    RmTrans(ed->cutTrans);
+    RmFt(ed->font);
   }
-  osFree(editor);
+  Free(ed);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -1006,16 +994,16 @@ void edDestroy(Editor editor) {
 
 
 int main(int argc, char* argv[]) {
-  Editor editor = edCreate(argc > 1 ? argv[1] : 0);
+  Ed ed = EdCreate(argc > 1 ? argv[1] : 0);
   while (1) {
-    while (osNextMessage(editor->window)) {
-      if (!edHandleMessage(editor)) {
-        edDestroy(editor);
+    while (NextMsg(ed->wnd)) {
+      if (!EdHandleMsg(ed)) {
+        RmEd(ed);
         return 0;
       }
     }
-    edUpdate(editor);
-    edDraw(editor);
+    EdUpd(ed);
+    EdPut(ed);
   }
   return 0;
 }

@@ -1,18 +1,24 @@
 #include "WeebCore.c"
 
-int main(int argc, char* argv[]) {
-  GMesh mesh;
-  OSWindow window = osCreateWindow();
-  GFont font = gDefaultFont();
-  GTransform transform = gCreateTransform();
-  osSetWindowClass(window, "HelloWindow");
-  osSetWindowName(window, "Hello Font");
+Trans MkBigTextTrans() {
+  Trans trans = MkTrans();
+  SetPos(trans, 0, 120);
+  SetScale1(trans, 2);
+  return trans;
+}
 
-  gTranslate(transform, 0, 120);
-  gScale1(transform, 2);
-  mesh = gCreateMesh();
-  gColor(mesh, 0xbebebe);
-  gFont(mesh, font, 10, 10, "Hello, this is a bitmap font!\nWow! 123450123ABC\n\n"
+int main(int argc, char* argv[]) {
+  Mesh mesh;
+  Wnd wnd = MkWnd();
+  Ft ft = DefFt();
+  Trans trans = MkBigTextTrans();
+  SetWndClass(wnd, "HelloWnd");
+  SetWndName(wnd, "Hello Font");
+
+  mesh = MkMesh();
+  Col(mesh, 0xbebebe);
+  FtMesh(mesh, ft, 10, 10,
+    "Hello, this is a bitmap ft!\nWow! 123450123ABC\n\n"
     "  Illegal1 = O0;\n"
     "  int* p = &Illegal1;\n\n"
     "  int main(int argc, char* argv[]) {\n"
@@ -20,21 +26,21 @@ int main(int argc, char* argv[]) {
     "  }");
 
   while (1) {
-    while (osNextMessage(window)) {
-      switch (osMessageType(window)) {
-        case OS_QUIT: {
-          gDestroyMesh(mesh);
-          gDestroyFont(font);
-          gDestroyTransform(transform);
-          osDestroyWindow(window);
+    while (NextMsg(wnd)) {
+      switch (MsgType(wnd)) {
+        case QUIT: {
+          RmMesh(mesh);
+          RmFt(ft);
+          RmTrans(trans);
+          RmWnd(wnd);
           return 0;
         }
       }
     }
 
-    gDrawMesh(mesh, 0, gFontTexture(font));
-    gDrawMesh(mesh, transform, gFontTexture(font));
-    gSwapBuffers(window);
+    PutMesh(mesh, 0, FtTex(ft));
+    PutMesh(mesh, ToTmpMat(trans), FtTex(ft));
+    SwpBufs(wnd);
   }
 
   return 0;
