@@ -103,15 +103,17 @@ void PutMesh(Mesh mesh, Mat mat, Tex tex);
 Mat MkMat();
 void RmMat(Mat mat);
 Mat DupMat(Mat source);
-void SetIdentity(Mat mat);
-void SetMat(Mat mat, float* matIn);
-void GetMat(Mat mat, float* matOut);
-void Scale(Mat mat, float x, float y);
-void Scale1(Mat mat, float scale);
-void Move(Mat mat, float x, float y);
-void Rot(Mat mat, float deg);
-void MulMat(Mat mat, Mat other);
-void MulMatFlt(Mat mat, float* matIn);
+
+/* these return mat for convienience. it's not actually a copy */
+Mat SetIdentity(Mat mat);
+Mat SetMat(Mat mat, float* matIn);
+Mat GetMat(Mat mat, float* matOut);
+Mat Scale(Mat mat, float x, float y);
+Mat Scale1(Mat mat, float scale);
+Mat Move(Mat mat, float x, float y);
+Mat Rot(Mat mat, float deg);
+Mat MulMat(Mat mat, Mat other);
+Mat MulMatFlt(Mat mat, float* matIn);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -248,21 +250,24 @@ char* ArgbToSprArr(int* argb, int width, int height);
 Trans MkTrans();
 void RmTrans(Trans trans);
 void ClrTrans(Trans trans);
-void SetScale(Trans trans, float x, float y);
-void SetScale1(Trans trans, float scale);
-void SetPos(Trans trans, float x, float y);
-void SetOrig(Trans trans, float x, float y);
-void SetRot(Trans trans, float deg);
+
+/* these return trans for convenience. it's not actually a copy */
+Trans SetScale(Trans trans, float x, float y);
+Trans SetScale1(Trans trans, float scale);
+Trans SetPos(Trans trans, float x, float y);
+Trans SetOrig(Trans trans, float x, float y);
+Trans SetRot(Trans trans, float deg);
+
 Mat ToMat(Trans trans);
 
 /* the ortho version of To* functions produce a mat that is orthogonal (doesn't apply scale
  * among other things) this is useful for trivial inversion */
 Mat ToMatOrtho(Trans trans);
 
-/* the trans returned by this does not need to be destroyed. it will be automatically destroyed
+/* the mat returned by this does not need to be destroyed. it will be automatically destroyed
  * when RmTrans is called.
  *
- * note that subsequent calls to this function will invalidate the previously generated trans.
+ * note that subsequent calls to this function will invalidate the previously generated mat
  *
  * Ortho version does not share the same trans as the non-Ortho so it doesnt invalidate it */
 Mat ToTmpMat(Trans trans);
@@ -826,27 +831,31 @@ void ClrTrans(Trans trans) {
   trans->deg = 0;
 }
 
-void SetScale(Trans trans, float x, float y) {
+Trans SetScale(Trans trans, float x, float y) {
   trans->sX = x;
   trans->sY = y;
+  return trans;
 }
 
-void SetScale1(Trans trans, float scale) {
-  SetScale(trans, scale, scale);
+Trans SetScale1(Trans trans, float scale) {
+  return SetScale(trans, scale, scale);
 }
 
-void SetPos(Trans trans, float x, float y) {
+Trans SetPos(Trans trans, float x, float y) {
   trans->x = x;
   trans->y = y;
+  return trans;
 }
 
-void SetOrig(Trans trans, float x, float y) {
+Trans SetOrig(Trans trans, float x, float y) {
   trans->oX = x;
   trans->oY = y;
+  return trans;
 }
 
-void SetRot(Trans trans, float deg) {
+Trans SetRot(Trans trans, float deg) {
   trans->deg = deg;
+  return trans;
 }
 
 static Mat CalcTrans(Trans trans, Mat mat, int ortho) {
@@ -855,8 +864,7 @@ static Mat CalcTrans(Trans trans, Mat mat, int ortho) {
   if (!ortho) {
     Scale(mat, trans->sX, trans->sY);
   }
-  Move(mat, -trans->oX, -trans->oY);
-  return mat;
+  return Move(mat, -trans->oX, -trans->oY);
 }
 
 Mat ToMat(Trans trans) { return CalcTrans(trans, MkMat(), 0); }
@@ -894,8 +902,7 @@ void InvTransPt(Mat mat, float* point) {
   point[0] -= m[12];
   point[1] -= m[13];
   m[12] = m[13] = m[14] = m[15] = m[3] = m[7] = m[11] = 0; /* equivalent of taking the 3x3 mat */
-  SetMat(copy, m);
-  MatPt(copy, point);
+  MatPt(SetMat(copy, m), point);
   RmMat(copy);
 }
 

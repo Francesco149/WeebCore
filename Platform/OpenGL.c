@@ -139,12 +139,13 @@ static void BeginMat(Mat mat) {
   }
 }
 
-static void EndMat(Mat mat) {
+static Mat EndMat(Mat mat) {
   if (mat) {
     glGetFloatv(GL_MODELVIEW_MATRIX, mat->mat);
   }
   glPopMatrix();
   glPopAttrib();
+  return mat;
 }
 
 /* i batch ops to avoid copying around the mat data for every call */
@@ -168,25 +169,26 @@ Mat DupMat(Mat source) {
   Mat mat = MkMat();
   CalcMat(source);
   EndMat(source);
-  SetMat(mat, source->mat);
-  return mat;
+  return SetMat(mat, source->mat);
 }
 
-void SetIdentity(Mat mat) {
+Mat SetIdentity(Mat mat) {
   SetArrLen(mat->operations, 0);
   MemSet(mat->mat, 0, sizeof(mat->mat));
   mat->mat[0] = mat->mat[5] = mat->mat[10] = mat->mat[15] = 1;
-  EndMat(mat);
+  return EndMat(mat);
 }
 
-void SetMat(Mat mat, float* matIn) {
+Mat SetMat(Mat mat, float* matIn) {
   MemCpy(mat->mat, matIn, 16 * sizeof(GLfloat));
+  return mat;
 }
 
-void GetMat(Mat mat, float* matOut) {
+Mat GetMat(Mat mat, float* matOut) {
   CalcMat(mat);
   EndMat(mat);
   MemCpy(matOut, mat->mat, 16 * sizeof(GLfloat));
+  return mat;
 }
 
 static MatOp* Op(Mat mat, int t) {
@@ -195,40 +197,39 @@ static MatOp* Op(Mat mat, int t) {
   return op;
 }
 
-static MatOp* XYOp(Mat mat,
-  int t, float x, float y
-) {
+static Mat XYOp(Mat mat, int t, float x, float y) {
   MatOp* op = Op(mat, t);
   op->u.xy.x = x;
   op->u.xy.y = y;
-  return op;
+  return mat;
 }
 
-void Scale(Mat mat, float x, float y) {
-  XYOp(mat, SCALE, x, y);
+Mat Scale(Mat mat, float x, float y) {
+  return XYOp(mat, SCALE, x, y);
 }
 
-void Scale1(Mat mat, float scale) {
-  Scale(mat, scale, scale);
+Mat Scale1(Mat mat, float scale) {
+  return Scale(mat, scale, scale);
 }
 
-void Move(Mat mat, float x, float y) {
-  XYOp(mat, TRANSLATE, x, y);
+Mat Move(Mat mat, float x, float y) {
+  return XYOp(mat, TRANSLATE, x, y);
 }
 
-void Rot(Mat mat, float deg) {
+Mat Rot(Mat mat, float deg) {
   MatOp* op = Op(mat, ROTATE);
   op->u.deg = deg;
+  return mat;
 }
 
-void MulMatFlt(Mat mat, float* matIn) {
+Mat MulMatFlt(Mat mat, float* matIn) {
   CalcMat(mat);
   glMultMatrixf(matIn);
-  EndMat(mat);
+  return EndMat(mat);
 }
 
-void MulMat(Mat mat, Mat other) {
-  MulMatFlt(mat, other->mat);
+Mat MulMat(Mat mat, Mat other) {
+  return MulMatFlt(mat, other->mat);
 }
 
 void PutMesh(Mesh mesh, Mat mat, Tex tex) {

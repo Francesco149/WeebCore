@@ -3,8 +3,7 @@
 Trans MkBigTextTrans() {
   Trans trans = MkTrans();
   SetPos(trans, 0, 120);
-  SetScale1(trans, 2);
-  return trans;
+  return SetScale1(trans, 2);
 }
 
 int main(int argc, char* argv[]) {

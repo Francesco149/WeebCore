@@ -78,8 +78,7 @@ void EdUpdBMesh(Editor ed) {
 
 Mat EdMkBgMat() {
   Mat mat = MkMat();
-  Scale1(mat, CHECKER_SIZE);
-  return mat;
+  return Scale1(mat, CHECKER_SIZE);
 }
 
 void EdMapToTex(Editor ed, float* point) {

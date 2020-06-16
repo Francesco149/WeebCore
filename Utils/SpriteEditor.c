@@ -852,8 +852,7 @@ void EdPut(Ed ed) {
   EdPutUpds(ed);
   if (ed->cutMesh) {
     Mat copy = DupMat(ed->cutMat);
-    MulMat(copy, ed->mat);
-    PutMesh(ed->cutMesh, copy, ed->cutTex);
+    PutMesh(ed->cutMesh, MulMat(copy, ed->mat), ed->cutTex);
     RmMat(copy);
   }
   if (ed->flags & ED_FSELECT) {
@@ -920,8 +919,7 @@ int* EdCreatePixs(int fillCol, int width, int height) {
 
 Mat EdCreateBgTrans() {
   Mat mat = MkMat();
-  Scale1(mat, ED_CHECKER_SIZE);
-  return mat;
+  return Scale1(mat, ED_CHECKER_SIZE);
 }
 
 Ed EdCreate(char* filePath) {
