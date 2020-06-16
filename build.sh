@@ -11,7 +11,7 @@ mkdir -p ./obj >/dev/null 2>&1
 
 # /path/to/meme.c -> meme
 exename() {
-  basename "$1" | rev | cut -d. -f2- | rev
+  basename "$1" | rev | cut -d. -f2- | rev | cut -d_ -f2-
 }
 
 compile() {
@@ -35,7 +35,7 @@ case "$1" in
   *)
     echo ":: building examples"
     for x in Examples/*.c; do
-      compile "$@" "$x" -I"$abspath" -o "./bin/$(exename "$x" | cut -d_ -f2-)"\
+      compile "$@" "$x" -I"$abspath" -o "./bin/$(exename "$x")"\
         || exit
     done
 
