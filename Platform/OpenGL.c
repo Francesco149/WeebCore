@@ -320,11 +320,11 @@ void SetTexMagFilter(Tex tex, int filter) {
   SetTexParam(tex, GL_TEXTURE_MAG_FILTER, ConvTexFilter(filter));
 }
 
-void Pixs(Tex tex, int width, int height, int* data) {
-  PixsEx(tex, width, height, data, width);
+Tex Pixs(Tex tex, int width, int height, int* data) {
+  return PixsEx(tex, width, height, data, width);
 }
 
-void PixsEx(Tex tex, int width, int height, int* data, int stride) {
+Tex PixsEx(Tex tex, int width, int height, int* data, int stride) {
   int* rgba = 0;
   int x, y;
   for (y = 0; y < height; ++y) {
@@ -337,6 +337,7 @@ void PixsEx(Tex tex, int width, int height, int* data, int stride) {
   RmArr(rgba);
   tex->width = width;
   tex->height = height;
+  return tex;
 }
 
 /* ---------------------------------------------------------------------------------------------- */

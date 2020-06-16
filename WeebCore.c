@@ -132,13 +132,14 @@ void SetTexMagFilter(Tex tex, int filter);
  * pixs are laid out row major - for example a 4x4 image would be:
  * { px00, px10, px01, px11 }
  * note that this is usually an expensive call. only update the tex data when it's actually
- * changing */
-void Pixs(Tex tex, int width, int height, int* data);
+ * changing.
+ * return tex for convenience */
+Tex Pixs(Tex tex, int width, int height, int* data);
 
 /* same as Pixs but you can specify stride which is how many bytes are between the beginning
  * of each row, for cases when you have extra padding or when you're submitting a sub-region of a
  * bigger image */
-void PixsEx(Tex tex, int width, int height, int* data, int stride);
+Tex PixsEx(Tex tex, int width, int height, int* data, int stride);
 
 /* ---------------------------------------------------------------------------------------------- */
 

@@ -12,8 +12,7 @@ Tex MkCheckerTex() {
   Tex tex;
   int data[4] = { 0xaaaaaa, 0x666666, 0x666666, 0xaaaaaa };
   tex = MkTex();
-  Pixs(tex, 2, 2, data);
-  return tex;
+  return Pixs(tex, 2, 2, data);
 }
 
 int* MkPixs(int fillCol, int width, int height) {

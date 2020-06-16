@@ -904,8 +904,7 @@ Tex EdCreateSelBorderTex() {
     0xff000000, 0x00ffffff, 0x00ffffff, 0xff000000,
     0xff000000, 0xff000000, 0xff000000, 0xff000000
   };
-  Pixs(texture, 4, 4, data);
-  return texture;
+  return Pixs(texture, 4, 4, data);
 }
 
 int* EdCreatePixs(int fillCol, int width, int height) {
