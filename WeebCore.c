@@ -882,7 +882,7 @@ Mat ToTmpMatOrtho(Trans trans) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void MatPt(Mat mat, float* point) {
+void TransPt(Mat mat, float* point) {
   Mat copy = DupMat(mat);
   float mPt[16];
   MemSet(mPt, 0, sizeof(mPt));
@@ -902,7 +902,7 @@ void InvTransPt(Mat mat, float* point) {
   point[0] -= m[12];
   point[1] -= m[13];
   m[12] = m[13] = m[14] = m[15] = m[3] = m[7] = m[11] = 0; /* equivalent of taking the 3x3 mat */
-  MatPt(SetMat(copy, m), point);
+  TransPt(SetMat(copy, m), point);
   RmMat(copy);
 }
 
