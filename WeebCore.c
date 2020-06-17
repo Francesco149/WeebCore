@@ -270,7 +270,10 @@ Mat ToMatOrtho(Trans trans);
  *
  * note that subsequent calls to this function will invalidate the previously generated mat
  *
- * Ortho version does not share the same trans as the non-Ortho so it doesnt invalidate it */
+ * Ortho version does not share the same trans as the non-Ortho so it doesnt invalidate it
+ *
+ * it's recommended to not hold onto these Mat pointers either way. if the Trans doesn't change,
+ * the Mat will not be recalculated, so it's cheap to call these everywhere */
 Mat ToTmpMat(Trans trans);
 Mat ToTmpMatOrtho(Trans trans);
 
