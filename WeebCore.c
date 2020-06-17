@@ -1459,7 +1459,7 @@ void CatSprHdr(char** pArr, int formatVersion, int width,
 {
   int i;
   char* p = ArrAlloc(pArr, 4);
-  StrCpy(p, "SP");
+  StrCpy(p, "WBSP");
   CatVarI32(pArr, formatVersion);
   CatVarI32(pArr, width);
   CatVarI32(pArr, height);
