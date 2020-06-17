@@ -1456,8 +1456,7 @@ static int PaletteIndex(int** palette, int color) {
 
 void CatSprHdr(char** pArr, int formatVersion, int width, int height, int* palette) {
   int i;
-  char* p = ArrAlloc(pArr, 4);
-  StrCpy(p, "WBSP");
+  ArrStrCat(pArr, "WBSP");
   CatVarI32(pArr, formatVersion);
   CatVarI32(pArr, width);
   CatVarI32(pArr, height);
