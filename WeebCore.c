@@ -1507,7 +1507,7 @@ Spr MkSpr(char* data, int length) {
   char* p = data;
   int paletteSize, i, dataLen;
   Spr spr = Alloc(sizeof(struct _Spr));
-  if (MemCmp(p, "SP", 4)) {
+  if (MemCmp(p, "WBSP", 4)) {
     /* TODO: error codes or something */
     return 0;
   }
