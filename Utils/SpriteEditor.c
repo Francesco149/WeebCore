@@ -40,7 +40,7 @@ char* EdHelpString() {
 #define ED_CHECKER_SIZE 8
 
 #define ED_FDRAGGING (1<<1)
-#define ED_FDRAWING (1<<2)
+#define ED_FPAINTING (1<<2)
 #define ED_FDIRTY (1<<3)
 #define ED_FEXPAND_COLOR_PICKER (1<<4)
 #define ED_FSELECT (1<<5)
@@ -122,7 +122,7 @@ void EdSelectedRect(Ed ed, float* rect);
 void EdClrPutRateLimiter(Ed ed);
 int EdUpdPutRateLimiter(Ed ed);
 int EdSampleCheckerboard(float x, float y);
-void EdPutPix(Ed ed, int x, int y, int col, int flags);
+void EdPaintPix(Ed ed, int x, int y, int col, int flags);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -283,7 +283,7 @@ void EdFillRect(Ed ed, float* rect, int col) {
   if (EdUpdPutRateLimiter(ed)) {
     for (y = RectTop(rect); y < RectBot(rect); ++y) {
       for (x = RectLeft(rect); x < RectRight(rect); ++x) {
-        EdPutPix(ed, x, y, col, 0);
+        EdPaintPix(ed, x, y, col, 0);
       }
     }
   }
@@ -391,7 +391,7 @@ void EdPaste(Ed ed, float* rect, int flags) {
         int dx = RectLeft(rect) + x;
         int dy = RectTop(rect) + y;
         int col = ed->cutData[y * stride + x];
-        EdPutPix(ed, dx, dy, col, flags);
+        EdPaintPix(ed, dx, dy, col, flags);
       }
     }
   }
@@ -463,13 +463,13 @@ void EdPutSelect(Ed ed) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void EdBeginPuting(Ed ed) {
+void EdBeginPainting(Ed ed) {
   switch (ed->tool) {
     case ED_SELECT: { EdBeginSelect(ed); break; }
   }
 }
 
-void EdPuting(Ed ed) {
+void EdPainting(Ed ed) {
   switch (ed->tool) {
     case ED_PENCIL: {
       int col = ed->cols[ed->colIndex];
@@ -479,7 +479,7 @@ void EdPuting(Ed ed) {
       EdMapToImg(ed, point);
       if (EdUpdPutRateLimiter(ed)) {
         /* alpha blend unless we're deleting the pixel with complete transparency */
-        EdPutPix(ed, (int)point[0], (int)point[1], col,
+        EdPaintPix(ed, (int)point[0], (int)point[1], col,
           ((col & 0xff000000) == 0xff000000) ? 0 : ED_FALPHA_BLEND);
       }
       break;
@@ -664,11 +664,11 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
     case MLEFT:
     case MRIGHT: {
       EdClrPutRateLimiter(ed);
-      ed->flags |= ED_FDRAWING;
+      ed->flags |= ED_FPAINTING;
       ed->colIndex = key == MRIGHT ? 1 : 0;
       ed->selAnchor = key == MRIGHT ? ED_SELECT_MID : ED_SELECT_NONE;
-      EdBeginPuting(ed);
-      EdPuting(ed);
+      EdBeginPainting(ed);
+      EdPainting(ed);
       EdFlushUpds(ed);
       break;
     }
@@ -683,7 +683,7 @@ void EdHandleKeyUp(Ed ed, int key) {
   switch (key) {
     case MMID: { ed->flags &= ~ED_FDRAGGING; break; }
     case MLEFT:
-    case MRIGHT: { ed->flags &= ~ED_FDRAWING; break; }
+    case MRIGHT: { ed->flags &= ~ED_FPAINTING; break; }
   }
 }
 
@@ -706,7 +706,7 @@ int EdHandleMsg(Ed ed) {
         ed->oY += MouseDY(wnd);
         EdUpdTrans(ed);
       }
-      if (flags & ED_FDRAWING) { EdPuting(ed); }
+      if (flags & ED_FPAINTING) { EdPainting(ed); }
       break;
     }
     case QUIT: { return 0; }
@@ -733,7 +733,7 @@ void EdUpd(Ed ed) {
   EdSelectedRect(ed, ed->effectiveSelRect);
 }
 
-void EdPutPix(Ed ed, int x, int y, int col, int flags) {
+void EdPaintPix(Ed ed, int x, int y, int col, int flags) {
   float rect[4];
   int fcol = col;
   SetRect(rect, 0, ed->width, 0, ed->height);

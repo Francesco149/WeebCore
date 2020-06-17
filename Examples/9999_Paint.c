@@ -28,7 +28,7 @@ int* MkPixs(int fillCol, int width, int height) {
 #define CHECKER_SIZE 64
 
 #define DRAGGING (1<<1)
-#define DRAWING (1<<2)
+#define PAINTING (1<<2)
 #define DIRTY (1<<3)
 
 typedef struct _EDUpd {
@@ -131,7 +131,7 @@ void RmEd(Editor ed) {
   Free(ed);
 }
 
-void EdPutPix(Editor ed) {
+void EdPaintPix(Editor ed) {
   int x, y;
   float point[2];
   point[0] = MouseX(ed->window);
@@ -174,8 +174,8 @@ void EdHandleKeyDown(Editor ed, int key) {
     case MWHEELUP: { EdChangeScale(ed, 1); break; }
     case MWHEELDOWN: { EdChangeScale(ed, -1); break; }
     case MLEFT: {
-      ed->flags |= DRAWING;
-      EdPutPix(ed);
+      ed->flags |= PAINTING;
+      EdPaintPix(ed);
       EdFlushUpds(ed);
       break;
     }
@@ -185,7 +185,7 @@ void EdHandleKeyDown(Editor ed, int key) {
 void EdHandleKeyUp(Editor ed, int key) {
   switch (key) {
     case MMID: { ed->flags &= ~DRAGGING; break; }
-    case MLEFT: { ed->flags &= ~DRAWING; break; }
+    case MLEFT: { ed->flags &= ~PAINTING; break; }
   }
 }
 
@@ -202,8 +202,8 @@ int EdHandleMsg(Editor ed) {
         ed->oY += MouseDY(window);
         EdUpdTrans(ed);
       }
-      if (flags & DRAWING) {
-        EdPutPix(ed);
+      if (flags & PAINTING) {
+        EdPaintPix(ed);
       }
       break;
     }
