@@ -119,8 +119,8 @@ void EdClrSelection(Ed ed);
 void EdUpdMesh(Ed ed);
 void EdClrPanning(Ed ed);
 void EdSelectedRect(Ed ed, float* rect);
-void EdClrPutRateLimiter(Ed ed);
-int EdUpdPutRateLimiter(Ed ed);
+void EdClrPaintRateLimiter(Ed ed);
+int EdUpdPaintRateLimiter(Ed ed);
 int EdSampleCheckerboard(float x, float y);
 void EdPaintPix(Ed ed, int x, int y, int col, int flags);
 
@@ -280,7 +280,7 @@ int* EdCreatePixsFromRegion(Ed ed, float* rect) {
 
 void EdFillRect(Ed ed, float* rect, int col) {
   int x, y;
-  if (EdUpdPutRateLimiter(ed)) {
+  if (EdUpdPaintRateLimiter(ed)) {
     for (y = RectTop(rect); y < RectBot(rect); ++y) {
       for (x = RectLeft(rect); x < RectRight(rect); ++x) {
         EdPaintPix(ed, x, y, col, 0);
@@ -477,7 +477,7 @@ void EdPainting(Ed ed) {
       point[0] = MouseX(ed->wnd);
       point[1] = MouseY(ed->wnd);
       EdMapToImg(ed, point);
-      if (EdUpdPutRateLimiter(ed)) {
+      if (EdUpdPaintRateLimiter(ed)) {
         /* alpha blend unless we're deleting the pixel with complete transparency */
         EdPaintPix(ed, (int)point[0], (int)point[1], col,
           ((col & 0xff000000) == 0xff000000) ? 0 : ED_FALPHA_BLEND);
@@ -654,7 +654,7 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
       break;
     }
     case T: {
-      if (EdUpdPutRateLimiter(ed)) {
+      if (EdUpdPaintRateLimiter(ed)) {
         EdPaste(ed, ed->effectiveSelRect, ED_FALPHA_BLEND);
       }
       break;
@@ -663,7 +663,7 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
     case MWHEELDOWN: { EdChangeScale(ed, -1); break; }
     case MLEFT:
     case MRIGHT: {
-      EdClrPutRateLimiter(ed);
+      EdClrPaintRateLimiter(ed);
       ed->flags |= ED_FPAINTING;
       ed->colIndex = key == MRIGHT ? 1 : 0;
       ed->selAnchor = key == MRIGHT ? ED_SELECT_MID : ED_SELECT_NONE;
@@ -765,11 +765,11 @@ void EdFlushUpds(Ed ed) {
   ed->flags &= ~ED_FDIRTY;
 }
 
-void EdClrPutRateLimiter(Ed ed) {
+void EdClrPaintRateLimiter(Ed ed) {
   ed->lastPutX = -1;
 }
 
-int EdUpdPutRateLimiter(Ed ed) {
+int EdUpdPaintRateLimiter(Ed ed) {
   float p[2];
   int x, y;
   p[0] = MouseX(ed->wnd);
