@@ -462,15 +462,15 @@ int NextMsg(Wnd wnd) {
         /* anything released for < 20ms is a repeat */
         /* TODO: Xkb can detect this without guessing */
         if (XEventsQueued(wnd->dpy, QueuedAfterReading)) {
-          int is_repeat;
+          int repeat;
           XPeekEvent(wnd->dpy, &nextXev);
-          is_repeat = (
+          repeat = (
             nextXev.type == KeyPress &&
             nextXev.xkey.window == xev.xkey.window &&
             nextXev.xkey.keycode == xev.xkey.keycode &&
             nextXev.xkey.time - xev.xkey.time < 20
           );
-          if (is_repeat) {
+          if (repeat) {
             wnd->u.key.state |= FREPEAT;
             wnd->u.key.state |= ConvKeyState(nextXev.xkey.state);
           }
