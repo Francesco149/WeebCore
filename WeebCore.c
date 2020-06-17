@@ -245,7 +245,7 @@ char* ArgbToSprArr(int* argb, int width, int height);
 /*                                          RENDER UTILS                                          */
 /* ---------------------------------------------------------------------------------------------- */
 
-/* create a trans from scale, position, origin, rot applied in a fixed order */
+/* create a mat from scale, position, origin, rot applied in a fixed order */
 
 Trans MkTrans();
 void RmTrans(Trans trans);
@@ -269,7 +269,7 @@ Mat ToMatOrtho(Trans trans);
  *
  * note that subsequent calls to this function will invalidate the previously generated mat
  *
- * Ortho version does not share the same trans as the non-Ortho so it doesnt invalidate it
+ * Ortho version does not share the same mat as the non-Ortho so it doesnt invalidate it
  *
  * it's recommended to not hold onto these Mat pointers either way. if the Trans doesn't change,
  * the Mat will not be recalculated, so it's cheap to call these everywhere */
@@ -279,7 +279,7 @@ Mat ToTmpMatOrtho(Trans trans);
 /* trans 2D point in place */
 void TransPt(Mat mat, float* point);
 
-/* trans 2D point in place by inverse of trans note that this only works if the mat is
+/* trans 2D point in place by inverse of mat note that this only works if the mat is
  * orthogonal, which means that it cannot have scale */
 void InvTransPt(Mat mat, float* point);
 
