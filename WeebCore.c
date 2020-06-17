@@ -1454,9 +1454,7 @@ static int PaletteIndex(int** palette, int color) {
   return ArrLen(*palette) - 1;
 }
 
-void CatSprHdr(char** pArr, int formatVersion, int width,
-  int height, int* palette)
-{
+void CatSprHdr(char** pArr, int formatVersion, int width, int height, int* palette) {
   int i;
   char* p = ArrAlloc(pArr, 4);
   StrCpy(p, "WBSP");
