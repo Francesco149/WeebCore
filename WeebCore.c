@@ -811,7 +811,11 @@ struct _Trans {
   float oX, oY;
   float deg;
   Mat tempMat, tempMatOrtho;
+  int dirty;
 };
+
+#define MAT_DIRTY (1<<0)
+#define MAT_ORTHO_DIRTY (1<<1)
 
 Trans MkTrans() {
   Trans trans = Alloc(sizeof(struct _Trans));
@@ -833,11 +837,13 @@ void ClrTrans(Trans trans) {
   trans->x = trans->y =
   trans->oX = trans->oY =
   trans->deg = 0;
+  trans->dirty = ~0;
 }
 
 Trans SetScale(Trans trans, float x, float y) {
   trans->sX = x;
   trans->sY = y;
+  trans->dirty = ~0;
   return trans;
 }
 
@@ -848,17 +854,20 @@ Trans SetScale1(Trans trans, float scale) {
 Trans SetPos(Trans trans, float x, float y) {
   trans->x = x;
   trans->y = y;
+  trans->dirty = ~0;
   return trans;
 }
 
 Trans SetOrig(Trans trans, float x, float y) {
   trans->oX = x;
   trans->oY = y;
+  trans->dirty = ~0;
   return trans;
 }
 
 Trans SetRot(Trans trans, float deg) {
   trans->deg = deg;
+  trans->dirty = ~0;
   return trans;
 }
 
@@ -875,13 +884,21 @@ Mat ToMat(Trans trans) { return CalcTrans(trans, MkMat(), 0); }
 Mat ToMatOrtho(Trans trans) { return CalcTrans(trans, MkMat(), 1); }
 
 Mat ToTmpMat(Trans trans) {
-  SetIdentity(trans->tempMat);
-  return CalcTrans(trans, trans->tempMat, 0);
+  if (trans->dirty & MAT_DIRTY) {
+    SetIdentity(trans->tempMat);
+    CalcTrans(trans, trans->tempMat, 0);
+    trans->dirty &= ~MAT_DIRTY;
+  }
+  return trans->tempMat;
 }
 
 Mat ToTmpMatOrtho(Trans trans) {
-  SetIdentity(trans->tempMatOrtho);
-  return CalcTrans(trans, trans->tempMatOrtho, 1);
+  if (trans->dirty & MAT_ORTHO_DIRTY) {
+    SetIdentity(trans->tempMatOrtho);
+    CalcTrans(trans, trans->tempMatOrtho, 1);
+    trans->dirty &= ~MAT_ORTHO_DIRTY;
+  }
+  return trans->tempMatOrtho;
 }
 
 /* ---------------------------------------------------------------------------------------------- */

@@ -50,7 +50,7 @@ typedef struct _Editor {
   int* imgData;
   EDUpd* updates;
   Trans trans;
-  Mat mat, matOrtho, bgMat;
+  Mat bgMat;
 }* Editor;
 
 Wnd MkEdWnd() {
@@ -82,7 +82,7 @@ Mat MkEdBgMat() {
 
 void EdMapToImg(Editor ed, float* point) {
   /* un-trans mouse coordinates so they are relative to the img */
-  InvTransPt(ed->matOrtho, point);
+  InvTransPt(ToTmpMatOrtho(ed->trans), point);
   point[0] /= ed->scale;
   point[1] /= ed->scale;
 }
@@ -92,8 +92,6 @@ void EdUpdTrans(Editor ed) {
   ClrTrans(trans);
   SetPos(trans, ed->oX, ed->oY);
   SetScale1(trans, ed->scale);
-  ed->mat = ToTmpMat(trans);
-  ed->matOrtho = ToTmpMatOrtho(trans);
 }
 
 Editor MkEd() {
@@ -232,13 +230,13 @@ void EdPutUpds(Editor ed) {
     Col(mesh, u->color);
     Quad(mesh, u->x, u->y, 1, 1);
   }
-  PutMesh(mesh, ed->mat, 0);
+  PutMesh(mesh, ToTmpMat(ed->trans), 0);
   RmMesh(mesh);
 }
 
 void EdPut(Editor ed) {
   PutMesh(ed->bgMesh, ed->bgMat, ed->checkerImg);
-  PutMesh(ed->mesh, ed->mat, ed->img);
+  PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->img);
   EdPutUpds(ed);
   SwpBufs(ed->window);
 }

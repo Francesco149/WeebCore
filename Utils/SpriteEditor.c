@@ -84,7 +84,6 @@ typedef struct _Ed {
   int* imgData;
   EDUpd* updates;
   Trans trans;
-  Mat mat, matOrtho;
   int tool;
   int width, height;
   int lastPutX, lastPutY;
@@ -102,14 +101,12 @@ typedef struct _Ed {
   int* cutData;
   float cutPotRect[4]; /* power of two size of the cut img */
   Mesh cutMesh;
-  Mat cutMat;
   Trans cutTrans;
   float cutSourceRect[4]; /* the location from where the cut data was taken */
 
   /* TODO: pull out col picker as a reusable widget */
   Mesh colPickerMesh;
   Trans colPickerTrans;
-  Mat colPickerMat;
   int colPickerSize;
   int grey;
   float colX, colY, greyY, alphaY;
@@ -176,13 +173,13 @@ void EdPutColPicker(Ed ed) {
     Quad(mesh, ed->colX - 1/128.0f, ed->colY - 1/128.0f, 1/64.0f, 1/64.0f);
     Col(mesh, 0x000000);
     Quad(mesh, ed->colX - 1/256.0f, ed->colY - 1/256.0f, 1/128.0f, 1/128.0f);
-    PutMesh(ed->colPickerMesh, ed->colPickerMat, 0);
+    PutMesh(ed->colPickerMesh, ToTmpMat(ed->colPickerTrans), 0);
   }
   Col(mesh, ed->cols[0]);
   Quad(mesh, 0, colsY         , 1/8.0f, 1/8.0f);
   Col(mesh, ed->cols[1]);
   Quad(mesh, 0, colsY + 1/8.0f, 1/8.0f, 1/8.0f);
-  PutMesh(mesh, ed->colPickerMat, 0);
+  PutMesh(mesh, ToTmpMat(ed->colPickerTrans), 0);
   RmMesh(mesh);
 }
 
@@ -192,7 +189,6 @@ void EdSizeColPicker(Ed ed) {
   ClrTrans(trans);
   SetPos(trans, 10, 10);
   SetScale1(trans, ed->colPickerSize);
-  ed->colPickerMat = ToTmpMat(trans);
 }
 
 void EdUpdColPickerMesh(Ed ed) {
@@ -353,7 +349,6 @@ void EdUpdYank(Ed ed) {
     ClrTrans(trans);
     /* TODO: instead of multiplying by scale everywhere, keep a separate mat for scale? */
     SetPos(trans, RectX(rect) * ed->scale, RectY(rect) * ed->scale);
-    ed->cutMat = ToTmpMat(trans);
   }
 }
 
@@ -456,11 +451,11 @@ void EdPutSelect(Ed ed) {
 
   SetImgWrapU(img, REPEAT);
   SetImgWrapV(img, CLAMP_TO_EDGE);
-  PutMesh(meshH, ed->mat, img);
+  PutMesh(meshH, ToTmpMat(ed->trans), img);
 
   SetImgWrapU(img, CLAMP_TO_EDGE);
   SetImgWrapV(img, REPEAT);
-  PutMesh(meshV, ed->mat, img);
+  PutMesh(meshV, ToTmpMat(ed->trans), img);
 
   RmMesh(meshH);
   RmMesh(meshV);
@@ -527,8 +522,6 @@ void EdUpdTrans(Ed ed) {
   ClrTrans(trans);
   SetPos(trans, ed->oX, ed->oY);
   SetScale1(trans, ed->scale);
-  ed->mat = ToTmpMat(trans);
-  ed->matOrtho = ToTmpMatOrtho(trans);
   EdUpdYank(ed);
 }
 
@@ -546,7 +539,7 @@ void EdUpdMesh(Ed ed) {
 
 void EdMapToImg(Ed ed, float* point) {
   /* un-mat mouse coordinates so they are relative to the img */
-  InvTransPt(ed->matOrtho, point);
+  InvTransPt(ToTmpMatOrtho(ed->trans), point);
   point[0] /= ed->scale;
   point[1] /= ed->scale;
 }
@@ -812,7 +805,7 @@ void EdPutUpds(Ed ed) {
     }
     Quad(mesh, u->x, u->y, 1, 1);
   }
-  PutMesh(mesh, ed->mat, 0);
+  PutMesh(mesh, ToTmpMat(ed->trans), 0);
   RmMesh(mesh);
 }
 
@@ -846,13 +839,13 @@ void EdPutBorders(Ed ed) {
 }
 
 void EdPut(Ed ed) {
-  PutMesh(ed->mesh, ed->mat, ed->checkerImg);
-  PutMesh(ed->mesh, ed->mat, ed->img);
+  PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->checkerImg);
+  PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->img);
   EdPutBorders(ed);
   EdPutUpds(ed);
   if (ed->cutMesh) {
-    Mat copy = DupMat(ed->cutMat);
-    PutMesh(ed->cutMesh, MulMat(copy, ed->mat), ed->cutImg);
+    Mat copy = ToMat(ed->cutTrans);
+    PutMesh(ed->cutMesh, MulMat(copy, ToTmpMat(ed->trans)), ed->cutImg);
     RmMat(copy);
   }
   if (ed->flags & ED_FSELECT) {
