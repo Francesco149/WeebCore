@@ -79,7 +79,7 @@ void SplitRects(PackerRect** rectsArr, PackerRect* toBePackedStruct) {
 }
 
 /* after the split step, there will be redundant rects because we create 1 rect for each side */
-void RemoveRedundantRects(PackerRect** rectsArr) {
+void RmRedundantRects(PackerRect** rectsArr) {
   int i, j;
   PackerRect* rects = *rectsArr;
   PackerRect* newRects = 0;
@@ -111,7 +111,7 @@ int PackRect(PackerRect** rectsArr, PackerRect* toBePacked) {
   SetRectPos(toBePacked->r, rects[freeRect].r[0], rects[freeRect].r[2]);
 
   SplitRects(rectsArr, toBePacked);
-  RemoveRedundantRects(rectsArr);
+  RmRedundantRects(rectsArr);
 
   return 1;
 }
