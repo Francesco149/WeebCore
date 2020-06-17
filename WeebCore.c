@@ -207,8 +207,8 @@ int RectInRect(float* needle, float* haystack);
 int RectInRectArea(float* needle, float* haystack);
 
 /* ---------------------------------------------------------------------------------------------- */
-/*                                          SPR FORMAT                                          */
-/* this is meant as simple RLE compression for 2D spriteswith a limited color palette             */
+/*                                          WBSPR FORMAT                                          */
+/* this is meant as simple RLE compression for 2D sprites with a limited color palette            */
 /* ---------------------------------------------------------------------------------------------- */
 
 typedef struct _Spr* Spr;
