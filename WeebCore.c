@@ -10,7 +10,6 @@
 
 /* opaque handles */
 typedef struct _Wnd* Wnd;
-typedef struct _Msg* Msg;
 typedef struct _Clk* Clk;
 
 Wnd MkWnd();
