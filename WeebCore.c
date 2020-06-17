@@ -430,8 +430,8 @@ int MemCmp(void* a, void* b, int n);
 /* protobuf style varints. encoded in base 128. each byte contains 7 bits of the integer and the
  * msb is set if there's more. byte order is little endian */
 
-int DecVarI32(char** pData);          /* increments *pData past the varint */
-int EncVarI32(void* data, int x);     /* returns num of bytes written */
+int DecVarI32(char** pData);        /* increments *pData past the varint */
+int EncVarI32(void* data, int x);   /* returns num of bytes written */
 void CatVarI32(char** pArr, int x); /* append to resizable arr */
 
 /* encode integers in little endian */
