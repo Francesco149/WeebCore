@@ -422,7 +422,7 @@ int RoundUpToPowerOfTwo(int x);
 
 /* null-terminated string utils */
 int StrLen(char* s);
-void StrCopy(char* dst, char* src);
+void StrCpy(char* dst, char* src);
 
 /* mem utils */
 int MemCmp(void* a, void* b, int n);
@@ -725,7 +725,7 @@ int StrLen(char* s) {
   return p - s;
 }
 
-void StrCopy(char* dst, char* src) {
+void StrCpy(char* dst, char* src) {
   while (*src) {
     *dst++ = *src++;
   }
@@ -1459,7 +1459,7 @@ void CatSprHdr(char** pArr, int formatVersion, int width,
 {
   int i;
   char* p = ArrAlloc(pArr, 4);
-  StrCopy(p, "SP");
+  StrCpy(p, "SP");
   CatVarI32(pArr, formatVersion);
   CatVarI32(pArr, width);
   CatVarI32(pArr, height);
