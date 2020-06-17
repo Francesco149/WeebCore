@@ -368,7 +368,7 @@ void PutFt(Ft ft, int x, int y, char* string);
 /*                                       RESIZABLE ARRAYS                                         */
 /*                                                                                                */
 /* make sure your initial pointer is initialized to NULL which counts as an empty array.          */
-/* these are special fat pointers and must be freed with RmArr                           */
+/* these are special fat pointers and must be freed with RmArr                                    */
 /* ---------------------------------------------------------------------------------------------- */
 
 void RmArr(void* array);
@@ -635,7 +635,7 @@ enum {
 /* ############################################################################################## */
 /* ############################################################################################## */
 /*                                                                                                */
-/*      Hdr part ends here. This is all you need to know to use it. Implementation below.      */
+/*        Hdr part ends here. This is all you need to know to use it. Implementation below.       */
 /*                                                                                                */
 /* ############################################################################################## */
 /* ############################################################################################## */
