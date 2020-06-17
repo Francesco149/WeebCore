@@ -563,7 +563,7 @@ void EdSave(Ed ed) {
   char* spr;
   EdFlushUpds(ed);
   spr = ArgbToSprArr(ed->imgData, ed->width, ed->height);
-  WriteFile(ed->filePath, spr, ArrLen(spr));
+  WrFile(ed->filePath, spr, ArrLen(spr));
   RmArr(spr);
 }
 
@@ -589,7 +589,7 @@ void EdSaveOneBpp(Ed ed) {
   RmArr(data);
   ArrStrCat(&path, ed->filePath);
   ArrStrCat(&path, ".txt");
-  WriteFile(path, b64Data, StrLen(b64Data));
+  WrFile(path, b64Data, StrLen(b64Data));
   RmArr(path);
   Free(b64Data);
 }

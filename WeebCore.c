@@ -54,10 +54,10 @@ void MemSet(void* p, unsigned char val, int n);
 void MemCpy(void* dst, void* src, int n);
 
 /* write data to disk. returns number of bytes written or < 0 for errors */
-int WriteFile(char* path, void* data, int dataLen);
+int WrFile(char* path, void* data, int dataLen);
 
 /* read up to maxSize bytes from disk */
-int ReadFile(char* path, void* data, int maxSize);
+int RdFile(char* path, void* data, int maxSize);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                           RENDERER                                             */
@@ -1536,7 +1536,7 @@ Spr MkSprFromFile(char* filePath) {
   int len = 1024000; /* TODO: handle bigger files */
   char* data = Alloc(len);
   Spr res;
-  len = ReadFile(filePath, data, len);
+  len = RdFile(filePath, data, len);
   res = len >= 0 ? MkSpr(data, len) : 0;
   Free(data);
   return res;

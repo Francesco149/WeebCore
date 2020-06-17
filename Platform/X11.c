@@ -66,7 +66,7 @@ void MemCpy(void* dst, void* src, int n) {
   memcpy(dst, src, n);
 }
 
-int WriteFile(char* path, void* data, int dataLen) {
+int WrFile(char* path, void* data, int dataLen) {
   FILE* f = fopen(path, "wb");
   int res;
   if (!f) {
@@ -77,7 +77,7 @@ int WriteFile(char* path, void* data, int dataLen) {
   return res;
 }
 
-int ReadFile(char* path, void* data, int maxSize) {
+int RdFile(char* path, void* data, int maxSize) {
   FILE* f = fopen(path, "rb");
   int res;
   if (!f) {
