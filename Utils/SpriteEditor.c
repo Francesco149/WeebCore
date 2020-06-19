@@ -31,6 +31,13 @@ char* EdHelpString() {
     "D            cut the contents of the selection. this will attach them to the selection\n"
     "Shift+D      undo cut. puts the contents of the cut back where they were\n"
     "T            (after cutting) paste the contents of the selection at the current location\n"
+    "HJKL/Arrows  move cursor\n"
+    "Shift (hold) move cursor faster when using HJKL/Arrows\n"
+    "Q            left-click\n"
+    "W            right-click\n"
+    "A            middle-click\n"
+    "[            zoom in\n"
+    "]            zoom out\n"
   );
 }
 
@@ -47,6 +54,8 @@ char* EdHelpString() {
 #define ED_FALPHA_BLEND (1<<6)
 #define ED_FIGNORE_SELECTION (1<<7)
 #define ED_FHELP (1<<8)
+#define ED_FHOLDING_SHIFT (1<<9)
+#define ED_FSHOW_CURSOR (1<<10)
 
 enum {
   ED_PENCIL,
@@ -74,6 +83,8 @@ typedef struct _Ed {
   Wnd wnd;
   int flags;
   float oX, oY;
+  float cX, cY;
+  int wishX, wishY;
   float flushTimer; /* TODO: built in timer events */
   int scale;
   int cols[2];
@@ -474,8 +485,8 @@ void EdPainting(Ed ed) {
     case ED_PENCIL: {
       int col = ed->cols[ed->colIndex];
       float point[2];
-      point[0] = MouseX(ed->wnd);
-      point[1] = MouseY(ed->wnd);
+      point[0] = (int)ed->cX;
+      point[1] = (int)ed->cY;
       EdMapToImg(ed, point);
       if (EdUpdPaintRateLimiter(ed)) {
         /* alpha blend unless we're deleting the pixel with complete transparency */
@@ -549,8 +560,8 @@ void EdChangeScale(Ed ed, int direction) {
   float newScale = ed->scale + direction * (ed->scale / 8 + 1);
   newScale = Min(32, newScale);
   newScale = Max(1, newScale);
-  p[0] = MouseX(ed->wnd);
-  p[1] = MouseY(ed->wnd);
+  p[0] = ed->cX;
+  p[1] = ed->cY;
   EdMapToImg(ed, p);
   /* adjust panning so the pixel we're pointing stays under the cursor */
   ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale));
@@ -608,8 +619,21 @@ void EdLoad(Ed ed) {
   }
 }
 
+void EdOnMotion(Ed ed, float dx, float dy) {
+  int flags = ed->flags;
+  ed->cX += dx;
+  ed->cY += dy;
+  if (flags & ED_FDRAGGING) {
+    ed->oX += dx;
+    ed->oY += dy;
+    EdUpdTrans(ed);
+  }
+  if (flags & ED_FPAINTING) { EdPainting(ed); }
+}
+
 void EdHandleKeyDown(Ed ed, int key, int state) {
   switch (key) {
+    case A:
     case MMID: { ed->flags |= ED_FDRAGGING; break; }
     case C: {
       if (ed->tool == ED_COLOR_PICKER) {
@@ -659,14 +683,18 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
       }
       break;
     }
+    case RIGHT_BRACKET:
     case MWHEELUP: { EdChangeScale(ed, 1); break; }
+    case LEFT_BRACKET:
     case MWHEELDOWN: { EdChangeScale(ed, -1); break; }
+    case Q:
+    case W:
     case MLEFT:
     case MRIGHT: {
       EdClrPaintRateLimiter(ed);
       ed->flags |= ED_FPAINTING;
-      ed->colIndex = key == MRIGHT ? 1 : 0;
-      ed->selAnchor = key == MRIGHT ? ED_SELECT_MID : ED_SELECT_NONE;
+      ed->colIndex = key == MRIGHT || key == W ? 1 : 0;
+      ed->selAnchor = key == MRIGHT || key == W ? ED_SELECT_MID : ED_SELECT_NONE;
       EdBeginPainting(ed);
       EdPainting(ed);
       EdFlushUpds(ed);
@@ -676,14 +704,29 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
       ed->flags ^= ED_FHELP;
       break;
     }
+    case H: { ed->wishX = -1; break; }
+    case L: { ed->wishX = 1; break; }
+    case K: { ed->wishY = -1; break; }
+    case J: { ed->wishY = 1; break; }
+    case LEFT_SHIFT:
+    case RIGHT_SHIFT: { ed->flags |= ED_FHOLDING_SHIFT; break; }
   }
 }
 
 void EdHandleKeyUp(Ed ed, int key) {
   switch (key) {
+    case A:
     case MMID: { ed->flags &= ~ED_FDRAGGING; break; }
+    case Q:
+    case W:
     case MLEFT:
     case MRIGHT: { ed->flags &= ~ED_FPAINTING; break; }
+    case LEFT_SHIFT:
+    case RIGHT_SHIFT: { ed->flags &= ~ED_FHOLDING_SHIFT; break; }
+    case H:
+    case L: { ed->wishX = 0; break; }
+    case K:
+    case J: { ed->wishY = 0; break; }
   }
 }
 
@@ -700,13 +743,10 @@ int EdHandleMsg(Ed ed) {
     }
     case KEYUP: { EdHandleKeyUp(ed, Key(wnd)); break; }
     case MOTION: {
-      int flags = ed->flags;
-      if (flags & ED_FDRAGGING) {
-        ed->oX += MouseDX(wnd);
-        ed->oY += MouseDY(wnd);
-        EdUpdTrans(ed);
-      }
-      if (flags & ED_FPAINTING) { EdPainting(ed); }
+      ed->cX = MouseX(wnd) - MouseDX(wnd);
+      ed->cY = MouseY(wnd) - MouseDY(wnd);
+      ed->flags &= ~ED_FSHOW_CURSOR;
+      EdOnMotion(ed, MouseDX(wnd), MouseDY(wnd));
       break;
     }
     case QUIT: { return 0; }
@@ -725,6 +765,13 @@ void EdUpd(Ed ed) {
     }
   } else {
     ed->flushTimer = 0;
+  }
+
+  if (ed->wishX || ed->wishY) {
+    float dx = ed->wishX * (ed->flags & ED_FHOLDING_SHIFT ? 300 : 100) * Delta(ed->wnd);
+    float dy = ed->wishY * (ed->flags & ED_FHOLDING_SHIFT ? 300 : 100) * Delta(ed->wnd);
+    ed->flags |= ED_FSHOW_CURSOR;
+    EdOnMotion(ed, dx, dy);
   }
 
   ed->selBlinkTimer += Delta(ed->wnd);
@@ -772,8 +819,8 @@ void EdClrPaintRateLimiter(Ed ed) {
 int EdUpdPaintRateLimiter(Ed ed) {
   float p[2];
   int x, y;
-  p[0] = MouseX(ed->wnd);
-  p[1] = MouseY(ed->wnd);
+  p[0] = ed->cX;
+  p[1] = ed->cY;
   EdMapToImg(ed, p);
   x = (int)p[0];
   y = (int)p[1];
@@ -838,6 +885,19 @@ void EdPutBorders(Ed ed) {
   RmMesh(mesh);
 }
 
+void EdPutCursor(Ed ed) {
+  /* TODO: do not use a tmp mesh for the cursor */
+  int x = (int)ed->cX;
+  int y = (int)ed->cY;
+  Mesh mesh = MkMesh();
+  Col(mesh, 0xffffff);
+  Tri(mesh, x, y, x, y + 20, x + 10, y + 17);
+  Col(mesh, ed->cols[ed->colIndex]);
+  Tri(mesh, x+1, y+3, x+1, y + 18, x + 8, y + 16);
+  PutMesh(mesh, 0, 0);
+  RmMesh(mesh);
+}
+
 void EdPut(Ed ed) {
   PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->checkerImg);
   PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->img);
@@ -847,6 +907,9 @@ void EdPut(Ed ed) {
     Mat copy = ToMat(ed->cutTrans);
     PutMesh(ed->cutMesh, MulMat(copy, ToTmpMat(ed->trans)), ed->cutImg);
     RmMat(copy);
+  }
+  if (ed->flags & ED_FSHOW_CURSOR) {
+    EdPutCursor(ed);
   }
   if (ed->flags & ED_FSELECT) {
     EdPutSelect(ed);
@@ -918,6 +981,8 @@ Ed EdCreate(char* filePath) {
   Ed ed = Alloc(sizeof(struct _Ed));
   ed->scale = 4;
   ed->wnd = EdCreateWnd();
+  ed->cX = WndWidth(ed->wnd) / 2;
+  ed->cY = WndHeight(ed->wnd) / 2;
   ed->checkerImg = EdCreateCheckerImg();
   ed->img = MkImg();
   ed->cutImg = MkImg();
@@ -942,7 +1007,7 @@ Ed EdCreate(char* filePath) {
   FtMesh(ed->helpTextMesh, ed->font, 15, 15, EdHelpString());
   ed->helpBgMesh = MkMesh();
   Col(ed->helpBgMesh, 0x33000000);
-  Quad(ed->helpBgMesh, 5, 5, 610, 290);
+  Quad(ed->helpBgMesh, 5, 5, 610, 365);
 
   EdClrSelection(ed);
   EdUpdColPickerMesh(ed);
