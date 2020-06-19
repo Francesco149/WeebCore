@@ -377,10 +377,9 @@ void SetArrLen(void* array, int len);
 
 /* shorthand macro to append a single element to the array */
 #define ArrCat(pArr, x) { \
-  int len = ArrLen(*(pArr)); \
   ArrReserve((pArr), 1); \
-  (*(pArr))[len] = (x); \
-  SetArrLen(*(pArr), len + 1); \
+  (*(pArr))[ArrLen(*(pArr))] = (x); \
+  SetArrLen(*(pArr), ArrLen(*(pArr)) + 1); \
 }
 
 /* reserve memory for at least numElements extra elements.
