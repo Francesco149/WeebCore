@@ -648,6 +648,7 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
       if (state & FCTRL) {
         EdSave(ed);
       } else if (state & FSHIFT) {
+        EdPaste(ed, ed->effectiveSelRect, ED_FALPHA_BLEND);
         EdClrSelection(ed);
       } else {
         ed->tool = ED_SELECT;
