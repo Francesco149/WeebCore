@@ -531,7 +531,7 @@ void EdPainting(Ed ed) {
 void EdUpdTrans(Ed ed) {
   Trans trans = ed->trans;
   ClrTrans(trans);
-  SetPos(trans, ed->oX, ed->oY);
+  SetPos(trans, (int)ed->oX, (int)ed->oY);
   SetScale1(trans, ed->scale);
   EdUpdYank(ed);
 }
