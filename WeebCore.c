@@ -445,6 +445,13 @@ char* ToB64(void* data, int dataSize);
 char* ArrToB64(char* data);
 char* ArrFromB64(char* b64Data);
 
+/* converts x to a string with the specified base and appends the characters to arr.
+   base is clamped to 1-16 */
+void ArrStrCatI32(char** arr, int x, int base);
+
+/* like ArrStrCatI32 but creates an arr on the fly and null terminates it. must be rmd with RmArr */
+char* I32ToArrStr(int x, int base);
+
 /* ---------------------------------------------------------------------------------------------- */
 /*                                      ENUMS AND CONSTANTS                                       */
 /* ---------------------------------------------------------------------------------------------- */
@@ -802,6 +809,36 @@ void SwpFlts(float* a, float* b) {
   float tmp = *a;
   *a = *b;
   *b = tmp;
+}
+
+char* I32ToArrStr(int x, int base) {
+  char* res = 0;
+  ArrStrCatI32(&res, x, base);
+  ArrCat(&res, 0);
+  return res;
+}
+
+void ArrStrCatI32(char** res, int x, int base) {
+  static char* charset = "0123456789abcdef";
+  int i, tmplen;
+  char* tmp = 0;
+  base = Min(16, Max(1, base));
+  if (x < 0) {
+    ArrCat(res, '-');
+    x *= -1;
+  }
+  while (x) {
+    ArrCat(&tmp, charset[x % base]);
+    x /= base;
+  }
+  if (ArrLen(tmp) <= 0) {
+    ArrCat(&tmp, '0');
+  }
+  tmplen = ArrLen(tmp);
+  for (i = 0; i < tmplen; ++i) {
+    ArrCat(res, tmp[tmplen - i - 1]);
+  }
+  RmArr(tmp);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
