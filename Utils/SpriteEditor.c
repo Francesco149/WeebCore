@@ -31,13 +31,17 @@ char* EdHelpString() {
     "D            cut the contents of the selection. this will attach them to the selection\n"
     "Shift+D      undo cut. puts the contents of the cut back where they were\n"
     "T            (after cutting) paste the contents of the selection at the current location\n"
+    "N            (after selecting) anim preview. this moves the selection right by its\n"
+    "             width until it finds a completely transparent frame\n"
+    "Shift+Wheel  adjust animation speed\n"
+    "Shift+N      cancel anim preview\n"
     "HJKL/Arrows  move cursor\n"
     "Shift (hold) move cursor faster when using HJKL/Arrows\n"
     "Q            left-click\n"
     "W            right-click\n"
     "A            middle-click\n"
-    "[            zoom in\n"
-    "]            zoom out\n"
+    "[            wheel up\n"
+    "]            wheel down\n"
   );
 }
 
@@ -56,6 +60,7 @@ char* EdHelpString() {
 #define ED_FHELP (1<<8)
 #define ED_FHOLDING_SHIFT (1<<9)
 #define ED_FSHOW_CURSOR (1<<10)
+#define ED_FANIM (1<<11)
 
 enum {
   ED_PENCIL,
@@ -107,6 +112,11 @@ typedef struct _Ed {
   float selRect[4];          /* raw rectangle between the cursor and the initial drag position */
   float effectiveSelRect[4]; /* normalized, snapped, etc selection rect */
   int selAnchor;
+
+  float animTimer;
+  int animSpeed;
+  float animRect[4];
+  float animStartRect[4];
 
   Img cutImg;
   int* cutData;
@@ -555,19 +565,23 @@ void EdMapToImg(Ed ed, float* point) {
   point[1] /= ed->scale;
 }
 
-void EdChangeScale(Ed ed, int direction) {
-  float p[2];
-  float newScale = ed->scale + direction * (ed->scale / 8 + 1);
-  newScale = Min(32, newScale);
-  newScale = Max(1, newScale);
-  p[0] = ed->cX;
-  p[1] = ed->cY;
-  EdMapToImg(ed, p);
-  /* adjust panning so the pixel we're pointing stays under the cursor */
-  ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale));
-  ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale));
-  ed->scale = newScale;
-  EdUpdTrans(ed);
+void EdOnWheel(Ed ed, int direction) {
+  if ((ed->flags & ED_FHOLDING_SHIFT) && (ed->flags & ED_FANIM)) {
+    ed->animSpeed = Max(1, Min(120, ed->animSpeed + direction));
+  } else {
+    float p[2];
+    float newScale = ed->scale + direction * (ed->scale / 8 + 1);
+    newScale = Min(32, newScale);
+    newScale = Max(1, newScale);
+    p[0] = ed->cX;
+    p[1] = ed->cY;
+    EdMapToImg(ed, p);
+    /* adjust panning so the pixel we're pointing stays under the cursor */
+    ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale));
+    ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale));
+    ed->scale = newScale;
+    EdUpdTrans(ed);
+  }
 }
 
 void EdSave(Ed ed) {
@@ -661,6 +675,16 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
       }
       break;
     }
+    case N: {
+      if (state & FSHIFT) {
+        ed->flags &= ~ED_FANIM;
+      } else if (ed->flags & ED_FSELECT) {
+        MemCpy(ed->animRect, ed->effectiveSelRect, sizeof(ed->animRect));
+        MemCpy(ed->animStartRect, ed->effectiveSelRect, sizeof(ed->animStartRect));
+        ed->flags |= ED_FANIM;
+      }
+      break;
+    }
     case K1: {
       if (state & FCTRL) {
         EdSaveOneBpp(ed);
@@ -685,9 +709,9 @@ void EdHandleKeyDown(Ed ed, int key, int state) {
       break;
     }
     case RIGHT_BRACKET:
-    case MWHEELUP: { EdChangeScale(ed, 1); break; }
+    case MWHEELUP: { EdOnWheel(ed, 1); break; }
     case LEFT_BRACKET:
-    case MWHEELDOWN: { EdChangeScale(ed, -1); break; }
+    case MWHEELDOWN: { EdOnWheel(ed, -1); break; }
     case Q:
     case W:
     case MLEFT:
@@ -779,6 +803,26 @@ void EdUpd(Ed ed) {
   ed->selBlinkTimer = FltMod(ed->selBlinkTimer, 2);
 
   EdSelectedRect(ed, ed->effectiveSelRect);
+
+  if (ed->flags & ED_FANIM) {
+    ed->animTimer += Delta(ed->wnd);
+    while (ed->animTimer >= 1.0f / ed->animSpeed) {
+      float* r = ed->animRect;
+      int x, y, empty = 1;
+      ed->animTimer -= 1.0f / ed->animSpeed;
+      SetRectPos(r, RectX(r) + RectWidth(r), RectY(r));
+      for (y = (int)RectTop(r); y < (int)RectBot(r); ++y) {
+        for (x = (int)RectLeft(r); x < (int)RectRight(r); ++x) {
+          if ((ed->imgData[y * ed->width + x] & 0xff000000) != 0xff000000) {
+            empty = 0;
+          }
+        }
+      }
+      if (empty) {
+        MemCpy(r, ed->animStartRect, sizeof(ed->animRect));
+      }
+    }
+  }
 }
 
 void EdPaintPix(Ed ed, int x, int y, int col, int flags) {
@@ -922,6 +966,32 @@ void EdPut(Ed ed) {
     PutMesh(ed->helpBgMesh, 0, 0);
     PutMesh(ed->helpTextMesh, 0, FtImg(ed->font));
   }
+  if (ed->flags & ED_FANIM) {
+    Mesh mesh;
+    char* str = 0;
+    float* r = ed->animRect;
+    int x = (int)(WndWidth(ed->wnd) - RectWidth(r) * ed->scale);
+    int w = RectWidth(r) * ed->scale;
+    int h = RectHeight(r) * ed->scale;
+
+    mesh = MkMesh();
+    Col(mesh, 0x7f000000);
+    Quad(mesh, x - 10, h + 10, w + 5, 20);
+    PutMesh(mesh, 0, 0);
+    RmMesh(mesh);
+
+    mesh = MkMesh();
+    ImgQuad(mesh, x + 5, 5, RectLeft(r), RectTop(r), w, h, RectWidth(r), RectHeight(r));
+    PutMesh(mesh, 0, ed->img);
+    RmMesh(mesh);
+
+    ArrStrCat(&str, "anim spd: ");
+    ArrStrCatI32(&str, ed->animSpeed, 10);
+    ArrStrCat(&str, " fps");
+    ArrCat(&str, 0);
+    PutFt(ed->font, 0xbebebe, x, (int)(RectHeight(r) * ed->scale) + 15, str);
+    RmArr(str);
+  }
   SwpBufs(ed->wnd);
 }
 
@@ -998,6 +1068,7 @@ Ed EdCreate(char* filePath) {
   ed->cols[1] = 0xff000000;
   ed->filePath = filePath ? filePath : "out.wbspr";
   ed->selBorderImg = EdCreateSelBorderImg();
+  ed->animSpeed = 5;
 
   ed->flags |= ED_FHELP;
   ed->font = DefFt();
@@ -1008,7 +1079,7 @@ Ed EdCreate(char* filePath) {
   FtMesh(ed->helpTextMesh, ed->font, 15, 15, EdHelpString());
   ed->helpBgMesh = MkMesh();
   Col(ed->helpBgMesh, 0x33000000);
-  Quad(ed->helpBgMesh, 5, 5, 610, 365);
+  Quad(ed->helpBgMesh, 5, 5, 610, 405);
 
   EdClrSelection(ed);
   EdUpdColPickerMesh(ed);
