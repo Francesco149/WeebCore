@@ -362,7 +362,7 @@ Img FtImg(Ft ft);
  * FtImg or a img that has the same exact layout */
 void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string);
 
-void PutFt(Ft ft, int x, int y, char* string);
+void PutFt(Ft ft, int col, int x, int y, char* string);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                       RESIZABLE ARRAYS                                         */
@@ -1313,12 +1313,11 @@ void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string) {
   }
 }
 
-void PutFt(Ft ft, int x, int y, char* string) {
-  Trans trans = MkTrans();
+void PutFt(Ft ft, int col, int x, int y, char* string) {
   Mesh mesh = MkMesh();
+  Col(mesh, col);
   FtMesh(mesh, ft, x, y, string);
-  SetPos(trans, x, y);
-  PutMesh(mesh, ToTmpMat(trans), FtImg(ft));
+  PutMesh(mesh, 0, FtImg(ft));
   RmMesh(mesh);
 }
 
