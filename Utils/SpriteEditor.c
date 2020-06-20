@@ -985,7 +985,7 @@ void EdPut(Ed ed) {
     RmMesh(mesh);
 
     mesh = MkMesh();
-    ImgQuad(mesh, x + 5, 5, RectLeft(r), RectTop(r), w, h, RectWidth(r), RectHeight(r));
+    ImgQuad(mesh, x, 5, RectLeft(r), RectTop(r), w, h, RectWidth(r), RectHeight(r));
     PutMesh(mesh, 0, ed->img);
     RmMesh(mesh);
 
