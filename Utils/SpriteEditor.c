@@ -807,14 +807,18 @@ void EdUpd(Ed ed) {
   if (ed->flags & ED_FANIM) {
     ed->animTimer += Delta(ed->wnd);
     while (ed->animTimer >= 1.0f / ed->animSpeed) {
+      float extents[4];
       float* r = ed->animRect;
       int x, y, empty = 1;
       ed->animTimer -= 1.0f / ed->animSpeed;
       SetRectPos(r, RectX(r) + RectWidth(r), RectY(r));
-      for (y = (int)RectTop(r); y < (int)RectBot(r); ++y) {
-        for (x = (int)RectLeft(r); x < (int)RectRight(r); ++x) {
-          if ((ed->imgData[y * ed->width + x] & 0xff000000) != 0xff000000) {
-            empty = 0;
+      SetRect(extents, 0, ed->width, 0, ed->height);
+      if (RectInRect(r, extents)) {
+        for (y = (int)RectTop(r); y < (int)RectBot(r); ++y) {
+          for (x = (int)RectLeft(r); x < (int)RectRight(r); ++x) {
+            if ((ed->imgData[y * ed->width + x] & 0xff000000) != 0xff000000) {
+              empty = 0;
+            }
           }
         }
       }
