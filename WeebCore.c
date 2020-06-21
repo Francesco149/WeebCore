@@ -182,6 +182,7 @@ void ClampFlts(int n, float* floats, float* result, float min, float max);
 void AddFlts(int n, float* a, float* b, float* result);
 
 /* these funcs operate on a rectangle represented as an array of 4 floats (left, top, right, bot) */
+void CpyRect(float* dst, float* src);
 void SetRect(float* rect, float left, float right, float top, float bot);
 void SetRectPos(float* rect, float x, float y);
 void SetRectSize(float* rect, float width, float height);
@@ -1541,6 +1542,10 @@ void AddFlts(int n, float* a, float* b, float* result) {
   for (i = 0; i < n; ++i) {
     result[i] = a[i] + b[i];
   }
+}
+
+void CpyRect(float* dst, float* src) {
+  SetRect(dst, src[0], src[1], src[2], src[3]);
 }
 
 void SetRect(float* rect, float left, float right, float top, float bot) {
