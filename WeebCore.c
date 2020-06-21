@@ -99,7 +99,7 @@ void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
 
 /* ---------------------------------------------------------------------------------------------- */
 
-/* OpenGL-like post-multiplied trans. mat memory layout is row major */
+/* OpenGL-like post-multiplied mat. mat memory layout is row major */
 
 Mat MkMat();
 void RmMat(Mat mat);
@@ -115,6 +115,19 @@ Mat Move(Mat mat, float x, float y);
 Mat Rot(Mat mat, float deg);
 Mat MulMat(Mat mat, Mat other);
 Mat MulMatFlt(Mat mat, float* matIn);
+
+/* multiply a b and store the result in a new Mat */
+Mat MkMulMat(Mat matA, Mat matB);
+Mat MkMulMatFlt(Mat matA, float* matB);
+
+/* trans 2D point in place */
+void TransPt(Mat mat, float* point);
+
+/* trans 2D point in place by inverse of mat. note that this only works if the mat is orthogonal */
+void InvTransPt(Mat mat, float* point);
+
+/* note: this is a DIRECT pointer to the matrix data so if you modify it it will affect it */
+float* MatFlts(Mat mat);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -282,13 +295,6 @@ Mat ToMatOrtho(Trans trans);
  * the Mat will not be recalculated, so it's cheap to call these everywhere */
 Mat ToTmpMat(Trans trans);
 Mat ToTmpMatOrtho(Trans trans);
-
-/* trans 2D point in place */
-void TransPt(Mat mat, float* point);
-
-/* trans 2D point in place by inverse of mat note that this only works if the mat is
- * orthogonal, which means that it cannot have scale */
-void InvTransPt(Mat mat, float* point);
 
 /* add a rectangle to mesh */
 void Quad(Mesh mesh, float x, float y, float width, float height);
@@ -1087,30 +1093,6 @@ Mat ToTmpMatOrtho(Trans trans) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void TransPt(Mat mat, float* point) {
-  Mat copy = DupMat(mat);
-  float mPt[16];
-  MemSet(mPt, 0, sizeof(mPt));
-  MemCpy(mPt, point, sizeof(float) * 2);
-  mPt[3] = 1;
-  MulMatFlt(copy, mPt);
-  GetMat(copy, mPt);
-  MemCpy(point, mPt, sizeof(float) * 2);
-  RmMat(copy);
-}
-
-void InvTransPt(Mat mat, float* point) {
-  /* https://en.wikibooks.org/wiki/GLSL_Programming/Applying_Matrix_Transformations#Transforming_Pts_with_the_Inverse_Matrix */
-  Mat copy = MkMat();
-  float m[16];
-  GetMat(mat, m);
-  point[0] -= m[12];
-  point[1] -= m[13];
-  m[12] = m[13] = m[14] = m[15] = m[3] = m[7] = m[11] = 0; /* equivalent of taking the 3x3 mat */
-  TransPt(SetMat(copy, m), point);
-  RmMat(copy);
-}
-
 void ImgTri(Mesh mesh,
   float x1, float y1, float u1, float v1,
   float x2, float y2, float u2, float v2,
@@ -1617,6 +1599,148 @@ float RectLeft(float* rect)  { return rect[0]; }
 float RectRight(float* rect) { return rect[1]; }
 float RectTop(float* rect) { return rect[2]; }
 float RectBot(float* rect) { return rect[3]; }
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* memory layout:
+ * float left_axis[4]; float up_axis[4]; float fwd_axis[4]; float translation[4]; */
+
+struct _Mat { float m[16]; };
+
+Mat MkMat() {
+  Mat mat = Alloc(sizeof(struct _Mat));
+  if (mat) {
+    mat->m[0] = mat->m[5] = mat->m[10] = mat->m[15] = 1;
+  }
+  return mat;
+}
+
+void RmMat(Mat mat) {
+  Free(mat);
+}
+
+Mat DupMat(Mat source) {
+  return SetMat(MkMat(), source->m);
+}
+
+/* these return mat for convienience. it's not actually a copy */
+Mat SetIdentity(Mat mat) {
+  MemSet(mat->m, 0, sizeof(mat->m));
+  mat->m[0] = mat->m[5] = mat->m[10] = mat->m[15] = 1;
+  return mat;
+}
+
+Mat SetMat(Mat mat, float* matIn) {
+  if (mat) {
+    MemCpy(mat->m, matIn, sizeof(mat->m));
+  }
+  return mat;
+}
+
+Mat GetMat(Mat mat, float* matOut) {
+  MemCpy(matOut, mat->m, sizeof(mat->m));
+  return mat;
+}
+
+#define MAT_IDENT { \
+    1, 0, 0, 0, \
+    0, 1, 0, 0, \
+    0, 0, 1, 0, \
+    0, 0, 0, 1 \
+  }
+
+float* MatFlts(Mat mat) {
+  static float identity[16] = MAT_IDENT;
+  return mat ? mat->m : identity;
+}
+
+Mat Scale(Mat mat, float x, float y) {
+  float m[16] = MAT_IDENT;
+  m[0] = x;
+  m[5] = y;
+  return MulMatFlt(mat, m);
+}
+
+Mat Scale1(Mat mat, float scale) {
+  return Scale(mat, scale, scale);
+}
+
+Mat Move(Mat mat, float x, float y) {
+  float m[16] = MAT_IDENT;
+  m[12] = x;
+  m[13] = y;
+  return MulMatFlt(mat, m);
+}
+
+Mat Rot(Mat mat, float deg) {
+  /* 2d rotation = z axis rotation. this means we rotate the left and up axes */
+  float s = Sin(deg);
+  float m[16] = MAT_IDENT;
+  m[0] = m[5] = Cos(deg);
+  m[1] = s;
+  m[4] = -s;
+  return MulMatFlt(mat, m);
+}
+
+Mat MulMat(Mat mat, Mat other) {
+  return MulMatFlt(mat, other->m);
+}
+
+Mat MulMatFlt(Mat mat, float* matIn) {
+  Mat tmp = MkMulMatFlt(mat, matIn);
+  SetMat(mat, tmp->m);
+  RmMat(tmp);
+  return mat;
+}
+
+Mat MkMulMat(Mat matA, Mat matB) {
+  return MkMulMatFlt(matA, matB->m);
+}
+
+Mat MkMulMatFlt(Mat matA, float* b) {
+  Mat res = MkMat();
+  float* a = matA->m;
+  float* m = res->m;
+  m[ 0] = b[ 0] * a[0] + b[ 1] * a[4] + b[ 2] * a[ 8] + b[ 3] * a[12];
+  m[ 1] = b[ 0] * a[1] + b[ 1] * a[5] + b[ 2] * a[ 9] + b[ 3] * a[13];
+  m[ 2] = b[ 0] * a[2] + b[ 1] * a[6] + b[ 2] * a[10] + b[ 3] * a[14];
+  m[ 3] = b[ 0] * a[3] + b[ 1] * a[7] + b[ 2] * a[11] + b[ 3] * a[15];
+  m[ 4] = b[ 4] * a[0] + b[ 5] * a[4] + b[ 6] * a[ 8] + b[ 7] * a[12];
+  m[ 5] = b[ 4] * a[1] + b[ 5] * a[5] + b[ 6] * a[ 9] + b[ 7] * a[13];
+  m[ 6] = b[ 4] * a[2] + b[ 5] * a[6] + b[ 6] * a[10] + b[ 7] * a[14];
+  m[ 7] = b[ 4] * a[3] + b[ 5] * a[7] + b[ 6] * a[11] + b[ 7] * a[15];
+  m[ 8] = b[ 8] * a[0] + b[ 9] * a[4] + b[10] * a[ 8] + b[11] * a[12];
+  m[ 9] = b[ 8] * a[1] + b[ 9] * a[5] + b[10] * a[ 9] + b[11] * a[13];
+  m[10] = b[ 8] * a[2] + b[ 9] * a[6] + b[10] * a[10] + b[11] * a[14];
+  m[11] = b[ 8] * a[3] + b[ 9] * a[7] + b[10] * a[11] + b[11] * a[15];
+  m[12] = b[12] * a[0] + b[13] * a[4] + b[14] * a[ 8] + b[15] * a[12];
+  m[13] = b[12] * a[1] + b[13] * a[5] + b[14] * a[ 9] + b[15] * a[13];
+  m[14] = b[12] * a[2] + b[13] * a[6] + b[14] * a[10] + b[15] * a[14];
+  m[15] = b[12] * a[3] + b[13] * a[7] + b[14] * a[11] + b[15] * a[15];
+  return res;
+}
+
+void TransPt(Mat mat, float* point) {
+  float mPt[16];
+  Mat tmp;
+  MemSet(mPt, 0, sizeof(mPt));
+  MemCpy(mPt, point, sizeof(float) * 2);
+  mPt[3] = 1;
+  tmp = MkMulMatFlt(mat, mPt);
+  MemCpy(point, tmp->m, sizeof(float) * 2);
+  RmMat(tmp);
+}
+
+void InvTransPt(Mat mat, float* point) {
+  /* https://en.wikibooks.org/wiki/GLSL_Programming/Applying_Matrix_Transformations#Transforming_Pts_with_the_Inverse_Matrix */
+  Mat tmp = DupMat(mat);
+  float* m = tmp->m;
+  point[0] -= m[12];
+  point[1] -= m[13];
+  m[12] = m[13] = m[14] = m[15] = m[3] = m[7] = m[11] = 0; /* equivalent of taking the 3x3 mat */
+  TransPt(tmp, point);
+  RmMat(tmp);
+}
 
 /* ---------------------------------------------------------------------------------------------- */
 
