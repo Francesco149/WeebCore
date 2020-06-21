@@ -181,6 +181,7 @@ void RmEnts(Ent* ents) {
   int i;
   for (i = 0; i < ArrLen(ents); ++i) {
     RmTrans(ents[i].trans);
+    RmMesh(ents[i].mesh);
   }
   RmArr(ents);
 }
@@ -234,6 +235,9 @@ int main() {
         case QUIT: {
           RmEnts(ents);
           RmImgMan(man);
+          RmMesh(text);
+          RmMesh(atlas);
+          RmFt(ft);
           RmWnd(wnd);
           return 0;
         }
