@@ -22,7 +22,6 @@ struct _ImgMan {
   int width, height;
   ImgPage* pages;
   ImgRegion* regions;
-  Packer pak;
 };
 
 ImgMan MkImgMan(int width, int height) {
