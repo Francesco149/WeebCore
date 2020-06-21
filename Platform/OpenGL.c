@@ -232,7 +232,7 @@ Mat MulMat(Mat mat, Mat other) {
   return MulMatFlt(mat, other->mat);
 }
 
-void PutMesh(Mesh mesh, Mat mat, Img img) {
+void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs) {
   int stride = sizeof(VertData);
   GLuint gltex, curImg;
 
@@ -250,6 +250,7 @@ void PutMesh(Mesh mesh, Mat mat, Img img) {
     glMatrixMode(GL_TEXTURE);
     glLoadIdentity();
     glScalef(1.0f / img->width, 1.0f / img->height, 1.0f);
+    glTranslatef(uOffs, vOffs, 0);
     glPopAttrib();
   }
 

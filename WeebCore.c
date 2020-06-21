@@ -93,7 +93,9 @@ void End(Mesh mesh);
 void Vert(Mesh mesh, float x, float y);
 void ImgCoord(Mesh mesh, float u, float v);
 void Face(Mesh mesh, int i1, int i2, int i3);
-void PutMesh(Mesh mesh, Mat mat, Img img);
+
+/* this is internally used to do img atlases and map relative uv's to the bigger image */
+void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -244,6 +246,10 @@ char* ArgbToSprArr(int* argb, int width, int height);
 /* ---------------------------------------------------------------------------------------------- */
 /*                                          RENDER UTILS                                          */
 /* ---------------------------------------------------------------------------------------------- */
+
+
+/* calls PutMeshEx with zero u/v offset */
+void PutMesh(Mesh mesh, Mat mat, Img img);
 
 /* create a mat from scale, position, origin, rot applied in a fixed order */
 
@@ -977,6 +983,10 @@ void ArrStrCatI32(char** res, int x, int base) {
 }
 
 /* ---------------------------------------------------------------------------------------------- */
+
+void PutMesh(Mesh mesh, Mat mat, Img img) {
+  PutMeshEx(mesh, mat, img, 0, 0);
+}
 
 struct _Trans {
   float sX, sY;
