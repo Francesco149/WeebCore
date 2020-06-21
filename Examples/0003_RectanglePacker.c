@@ -1,7 +1,5 @@
 #include "WeebCore.c"
 
-/* a simple best fit 2D rectangle packer. early version of what's going to be built into WeebCore */
-
 Wnd MkPackerWnd() {
   Wnd wnd = MkWnd();
   SetWndName(wnd, "WeebCore - Rectangle Packer Example");
@@ -24,126 +22,26 @@ Mesh MkFullText(Ft font) {
   return mesh;
 }
 
-typedef struct { float r[4]; } PackerRect; /* left, right, top bottom */
-
-void AddRect(PackerRect** rectsArr, float left, float right, float top, float bottom) {
-  PackerRect* newRect = ArrAlloc(rectsArr, 1);
-  SetRect(newRect->r, left, right, top, bottom);
-}
-
-void AddRectFloats(PackerRect** rectsArr, float* r) {
-  PackerRect* newRect = ArrAlloc(rectsArr, 1);
-  MemCpy(newRect, r, sizeof(float) * 4);
-}
-
-/* find the best fit free rectangle (smallest area that can fit the rect).
- * initially we will have 1 big free rect that takes the entire area */
-int FindFreeRect(PackerRect* rects, PackerRect* toBePackedStruct) {
-  int i, bestFit = -1;
-  float bestFitArea = 2000000000;
-  float* toBePacked = toBePackedStruct->r;
-  for (i = 0; i < ArrLen(rects); ++i) {
-    float* rect = rects[i].r;
-    if (RectInRectArea(toBePacked, rect)) {
-      float area = RectWidth(rect) * RectHeight(rect);
-      if (area < bestFitArea) {
-        bestFitArea = area;
-        bestFit = i;
-      }
-    }
-  }
-  return bestFit;
-}
-
-/* once we have found a location for the rectangle, we need to split any free rectangles it
- * partially intersects with. this will generate two or more smaller rects */
-void SplitRects(PackerRect** rectsArr, PackerRect* toBePackedStruct) {
-  PackerRect* rects = *rectsArr;
-  float* toBePacked = toBePackedStruct->r;
-  int i;
-  PackerRect* newRects = 0;
-  for (i = 0; i < ArrLen(rects); ++i) {
-    float* r = rects[i].r;
-    if (RectSect(toBePacked, r)) {
-      if (toBePacked[0] > r[0]) { AddRect(&newRects, r[0], toBePacked[0], r[2], r[3]); /* left  */ }
-      if (toBePacked[1] < r[1]) { AddRect(&newRects, toBePacked[1], r[1], r[2], r[3]); /* right */ }
-      if (toBePacked[2] > r[2]) { AddRect(&newRects, r[0], r[1], r[2], toBePacked[2]); /* top   */ }
-      if (toBePacked[3] < r[3]) { AddRect(&newRects, r[0], r[1], toBePacked[3], r[3]); /* bott  */ }
-    } else {
-      AddRectFloats(&newRects, r);
-    }
-  }
-
-  RmArr(*rectsArr);
-  *rectsArr = newRects;
-}
-
-/* after the split step, there will be redundant rects because we create 1 rect for each side */
-void RmRedundantRects(PackerRect** rectsArr) {
-  int i, j;
-  PackerRect* rects = *rectsArr;
-  PackerRect* newRects = 0;
-  for (i = 0; i < ArrLen(rects); ++i) {
-    for (j = 0; j < ArrLen(rects); ++j) {
-      if (RectInRect(rects[i].r, rects[j].r)) {
-        rects[i].r[0] = rects[i].r[1] = 0;
-      } else if (RectInRect(rects[j].r, rects[i].r)) {
-        rects[j].r[0] = rects[j].r[1] = 0;
-      }
-    }
-    if (RectWidth(rects[i].r) > 0) {
-      AddRectFloats(&newRects, rects[i].r);
-    }
-  }
-  RmArr(*rectsArr);
-  *rectsArr = newRects;
-}
-
-int PackRect(PackerRect** rectsArr, PackerRect* toBePacked) {
-  PackerRect* rects = *rectsArr;
-
-  int freeRect = FindFreeRect(rects, toBePacked);
-  if (freeRect < 0) { /* full */
-    return 0;
-  }
-
-  /* move rectangle to the top left of the free area */
-  SetRectPos(toBePacked->r, rects[freeRect].r[0], rects[freeRect].r[2]);
-
-  SplitRects(rectsArr, toBePacked);
-  RmRedundantRects(rectsArr);
-
-  return 1;
-}
-
-void ClrRects(PackerRect** rectsArr, Wnd wnd) {
-  /* initialize area to be one big free rect */
-  SetArrLen(*rectsArr, 0);
-  AddRect(rectsArr, 0, WndWidth(wnd), 0, WndHeight(wnd));
-}
-
 int main() {
   Wnd wnd = MkPackerWnd();
   Ft font = DefFt();
   Mesh help = MkHelpText(font);
   Mesh full = MkFullText(font);
   Mesh packedRects = MkMesh();
+  Packer pak = MkPacker(WndWidth(wnd), WndHeight(wnd));
 
-  PackerRect* rects = 0;
   unsigned timeElapsed = 0;
   int col = 0;
   int isFull = 0;
-  PackerRect dragRectStruct;
-  float* dragRect = dragRectStruct.r;
+  float dragRect[4];
 
   dragRect[0] = dragRect[2] = -1;
-  ClrRects(&rects, wnd);
 
   while (1) {
     while (NextMsg(wnd)) {
       switch (MsgType(wnd)) {
         case QUIT: {
-          RmArr(rects);
+          RmPacker(pak);
           RmMesh(packedRects);
           RmMesh(help);
           RmMesh(full);
@@ -164,7 +62,8 @@ int main() {
             case F2: {
               RmMesh(packedRects);
               packedRects = MkMesh();
-              ClrRects(&rects, wnd);
+              RmPacker(pak);
+              pak = MkPacker(WndWidth(wnd), WndHeight(wnd));
               break;
             }
           }
@@ -174,12 +73,13 @@ int main() {
           if (Key(wnd) == MLEFT) {
             /* ensure the coordinates are in the right order
              * when we drag right to left / bot to top */
-            PackerRect norm = dragRectStruct;
-            NormRect(norm.r);
-            isFull = !PackRect(&rects, &norm);
+            float norm[4];
+            MemCpy(norm, dragRect, sizeof(norm));
+            NormRect(norm);
+            isFull = !Pack(pak, norm);
             if (!isFull) {
               Col(packedRects, col);
-              Quad(packedRects, norm.r[0], norm.r[2], RectWidth(norm.r), RectHeight(norm.r));
+              Quad(packedRects, norm[0], norm[2], RectWidth(norm), RectHeight(norm));
             }
             dragRect[0] = dragRect[2] = -1;
           }
@@ -201,10 +101,11 @@ int main() {
 
     if (dragRect[0] >= 0) {
       Mesh mesh = MkMesh();
-      PackerRect norm = dragRectStruct;
-      NormRect(norm.r);
+      float norm[4];
+      MemCpy(norm, dragRect, sizeof(norm));
+      NormRect(norm);
       Col(mesh, col);
-      Quad(mesh, norm.r[0], norm.r[2], RectWidth(norm.r), RectHeight(norm.r));
+      Quad(mesh, norm[0], norm[2], RectWidth(norm), RectHeight(norm));
       PutMesh(mesh, 0, 0);
       RmMesh(mesh);
     }

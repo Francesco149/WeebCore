@@ -812,7 +812,7 @@ void EdUpd(Ed ed) {
       int x, y, empty = 1;
       ed->animTimer -= 1.0f / ed->animSpeed;
       SetRectPos(r, RectX(r) + RectWidth(r), RectY(r));
-      SetRect(extents, 0, ed->width + 1, 0, ed->height + 1);
+      SetRect(extents, 0, ed->width, 0, ed->height);
       if (RectInRect(r, extents)) {
         for (y = (int)RectTop(r); y < (int)RectBot(r); ++y) {
           for (x = (int)RectLeft(r); x < (int)RectRight(r); ++x) {

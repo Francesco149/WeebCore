@@ -399,6 +399,27 @@ void* ArrReserveEx(void** pArr, int elementSize, int numElements);
 void* ArrAllocEx(void** pArr, int elementSize, int numElements);
 
 /* ---------------------------------------------------------------------------------------------- */
+/*                                         RECT PACKER                                            */
+/*                                                                                                */
+/* attempts to efficiently pack rectangles inside a bigger rectangle. internally used to          */
+/* automatically stitch together all the imags and not have the renderer swap img every time.     */
+/* ---------------------------------------------------------------------------------------------- */
+
+/* opaque handle */
+typedef struct _Packer* Packer;
+
+Packer MkPacker(int width, int height);
+void RmPacker(Packer pak);
+
+/* rect is an array of 4 floats (left, right, top, bottom) like in the Rect funcs
+ *
+ * NOTE: this adjusts rect in place and just returns it for convenience. make a copy if you don't
+ * want to lose rect's original values.
+ *
+ * returns NULL if rect doesn't fit */
+float* Pack(Packer pak, float* rect);
+
+/* ---------------------------------------------------------------------------------------------- */
 /*                                   MISC UTILS AND MACROS                                        */
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -710,6 +731,120 @@ void* ArrAllocEx(void** pArr, int elementSize, int numElements) {
   void* res = ArrReserveEx(pArr, elementSize, numElements);
   SetArrLen(*pArr, ArrLen(*pArr) + numElements);
   return res;
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+
+typedef struct { float r[4]; } PackerRect; /* left, right, top bottom */
+
+struct _Packer {
+  PackerRect* rects;
+};
+
+/* adds a free rect */
+static void ArrCatRect(PackerRect** arr, float left, float right, float top, float bottom) {
+  PackerRect* newRect = ArrAlloc(arr, 1);
+  SetRect(newRect->r, left, right, top, bottom);
+}
+
+static void ArrCatRectFlts(PackerRect** arr, float* r) {
+  PackerRect* newRect = ArrAlloc(arr, 1);
+  MemCpy(newRect, r, sizeof(float) * 4);
+}
+
+Packer MkPacker(int width, int height) {
+  Packer pak = Alloc(sizeof(struct _Packer));
+  if (pak) {
+    /* initialize area to be one big free rect */
+    ArrCatRect(&pak->rects, 0, width, 0, height);
+  }
+  return pak;
+}
+
+void RmPacker(Packer pak) {
+  if (pak) {
+    RmArr(pak->rects);
+  }
+  Free(pak);
+}
+
+/* find the best fit free rectangle (smallest area that can fit the rect).
+ * initially we will have 1 big free rect that takes the entire area */
+static int PakFindFree(Packer pak, float* rect) {
+  PackerRect* rects = pak->rects;
+  int i, bestFit = -1;
+  float bestFitArea = 2000000000;
+  for (i = 0; i < ArrLen(rects); ++i) {
+    float* r = rects[i].r;
+    if (RectInRectArea(rect, r)) {
+      float area = RectWidth(r) * RectHeight(r);
+      if (area < bestFitArea) {
+        bestFitArea = area;
+        bestFit = i;
+      }
+    }
+  }
+  return bestFit;
+}
+
+/* once we have found a location for the rectangle, we need to split any free rectangles it
+ * partially intersects with. this will generate two or more smaller rects */
+static void PakSplit(Packer pak, float* rect) {
+  PackerRect* rects = pak->rects;
+  int i;
+  PackerRect* newRects = 0;
+  for (i = 0; i < ArrLen(rects); ++i) {
+    float* r = rects[i].r;
+    if (RectSect(rect, r)) {
+      if (rect[0] > r[0]) { ArrCatRect(&newRects, r[0], rect[0], r[2], r[3]); /* left  */ }
+      if (rect[1] < r[1]) { ArrCatRect(&newRects, rect[1], r[1], r[2], r[3]); /* right */ }
+      if (rect[2] > r[2]) { ArrCatRect(&newRects, r[0], r[1], r[2], rect[2]); /* top   */ }
+      if (rect[3] < r[3]) { ArrCatRect(&newRects, r[0], r[1], rect[3], r[3]); /* bott  */ }
+    } else {
+      ArrCatRectFlts(&newRects, r);
+    }
+  }
+  RmArr(rects);
+  pak->rects = newRects;
+}
+
+/* after the split step, there will be redundant rects because we create 1 rect for each side */
+static void PakPrune(Packer pak) {
+  int i, j;
+  PackerRect* rects = pak->rects;
+  PackerRect* newRects = 0;
+  for (i = 0; i < ArrLen(rects); ++i) {
+    for (j = 0; j < ArrLen(rects); ++j) {
+      if (i == j) { continue; }
+      if (RectInRect(rects[i].r, rects[j].r)) {
+        rects[i].r[0] = rects[i].r[1] = 0; /* make it zero size to mark for removal */
+      } else if (RectInRect(rects[j].r, rects[i].r)) {
+        rects[j].r[0] = rects[j].r[1] = 0;
+      }
+    }
+    if (RectWidth(rects[i].r) > 0) {
+      ArrCatRectFlts(&newRects, rects[i].r);
+    }
+  }
+  RmArr(rects);
+  pak->rects = newRects;
+}
+
+float* Pack(Packer pak, float* rect) {
+  float* free;
+  int freeRect = PakFindFree(pak, rect);
+  if (freeRect < 0) { /* full */
+    return 0;
+  }
+
+  /* move rectangle to the top left of the free area */
+  free = pak->rects[freeRect].r;
+  SetRectPos(rect, free[0], free[2]);
+
+  /* update free rects */
+  PakSplit(pak, rect);
+  PakPrune(pak);
+  return rect;
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -1443,8 +1578,8 @@ int RectSect(float* a, float* b) {
 
 int RectInRect(float* needle, float* haystack) {
   return (
-    needle[0] >= haystack[0] && needle[1] < haystack[1] &&
-    needle[2] >= haystack[2] && needle[3] < haystack[3]
+    needle[0] >= haystack[0] && needle[1] <= haystack[1] &&
+    needle[2] >= haystack[2] && needle[3] <= haystack[3]
   );
 }
 
