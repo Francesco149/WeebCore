@@ -1,140 +1,13 @@
 #ifndef WEEBCORE_HEADER
 #define WEEBCORE_HEADER
 
-/* ---------------------------------------------------------------------------------------------- */
-/*                                        PLATFORM LAYER                                          */
-/*                                                                                                */
-/* you can either include Platform/Platform.h to use the built in sample platform layers or write */
-/* your own by defining these structs and funcs                                                   */
-/* ---------------------------------------------------------------------------------------------- */
-
-/* opaque handles */
-typedef struct _Wnd* Wnd;
-typedef struct _Clk* Clk;
-
-Wnd MkWnd();
-void RmWnd(Wnd wnd);
-void SetWndName(Wnd wnd, char* wndName);
-void SetWndClass(Wnd wnd, char* className);
-void SetWndSize(Wnd wnd, int width, int height);
-int WndWidth(Wnd wnd);
-int WndHeight(Wnd wnd);
-
-/* get time elapsed in seconds since the last SwpBufs. guaranteed to return non-zero even if
- * no SwpBufs happened */
-float Delta(Wnd wnd);
-
-/* FPS limiter, 0 for unlimited. limiting happens in SwpBufs. note that unlimited fps still
- * waits for the minimum timer resolution for GetTime */
-void SetWndFPS(Wnd wnd, int fps);
-
-/* fetch one message. returns non-zero as long as there are more */
-int NextMsg(Wnd wnd);
-
-/* sends QUIT message to the wnd */
-void PostQuitMsg(Wnd wnd);
-
-/* these funcs get data from the last message fetched by NextMsg */
-int MsgType(Wnd wnd);
-int Key(Wnd wnd);
-int KeyState(Wnd wnd);
-int MouseX(Wnd wnd);
-int MouseY(Wnd wnd);
-int MouseDX(Wnd wnd);
-int MouseDY(Wnd wnd);
-
-/* allocates n bytes and initializes memory to zero */
-void* Alloc(int n);
-
-/* reallocate p to new size n. memory that wasn't initialized is not guaranteed to be zero */
-void* Realloc(void* p, int n);
-
-void Free(void* p);
-void MemSet(void* p, unsigned char val, int n);
-void MemCpy(void* dst, void* src, int n);
-
-/* write data to disk. returns number of bytes written or < 0 for errors */
-int WrFile(char* path, void* data, int dataLen);
-
-/* read up to maxSize bytes from disk */
-int RdFile(char* path, void* data, int maxSize);
-
-/* ---------------------------------------------------------------------------------------------- */
-/*                                           RENDERER                                             */
-/*                                                                                                */
-/* you can either include Platform/Platform.h to use the built in sample renderers or write your  */
-/* own by defining these structs and funcs                                                        */
-/* ---------------------------------------------------------------------------------------------- */
-
 /* opaque handles */
 typedef struct _Mesh* Mesh;
 typedef struct _Img* Img;
 typedef struct _Trans* Trans;
-
-/* ---------------------------------------------------------------------------------------------- */
-
-/* Mesh is a collection of vertices that will be rendered using the same img and trans. try
- * to batch up as much stuff into a mesh as possible for optimal performance. */
-
-Mesh MkMesh();
-void RmMesh(Mesh mesh);
-
-/* change current color. color is Argb 32-bit int (0xAARRGGBB). 255 alpha = completely transparent,
- * 0 alpha = completely opaque */
-void Col(Mesh mesh, int color);
-
-/* these are for custom meshes.
- * wrap Vert and Face calls between Begin and End.
- * indices start at zero and we are indexing the vertices submitted between Begin and End. see the
- * implementations of Quad and Tri for examples */
-void Begin(Mesh mesh);
-void End(Mesh mesh);
-void Vert(Mesh mesh, float x, float y);
-void ImgCoord(Mesh mesh, float u, float v);
-void Face(Mesh mesh, int i1, int i2, int i3);
-
-/* this is internally used to do img atlases and map relative uv's to the bigger image */
-void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
-
-/* ---------------------------------------------------------------------------------------------- */
-
-Img MkImg();
-void RmImg(Img img);
-
-/* set wrap mode for img coordinates. default is REPEAT */
-void SetImgWrapU(Img img, int mode);
-void SetImgWrapV(Img img, int mode);
-
-/* set min/mag filter for img. default is NEAREST */
-void SetImgMinFilter(Img img, int filter);
-void SetImgMagFilter(Img img, int filter);
-
-/* set the img's pix data. must be an array of 0xAARRGGBB colors as explained in Col.
- * pixs are laid out row major - for example a 4x4 image would be:
- * { px00, px10, px01, px11 }
- * note that this is usually an expensive call. only update the img data when it's actually
- * changing.
- * return img for convenience */
-Img Pixs(Img img, int width, int height, int* data);
-
-/* same as Pixs but you can specify stride which is how many bytes are between the beginning
- * of each row, for cases when you have extra padding or when you're submitting a sub-region of a
- * bigger image */
-Img PixsEx(Img img, int width, int height, int* data, int stride);
-
-/* ---------------------------------------------------------------------------------------------- */
-
-/* flush all rendered geometry to the screen */
-void SwpBufs(Wnd wnd);
-
-/* set rendering rectangle from the top left of the wnd, in pixs. this is automatically called
- * when the wnd is resized. it can also be called manually to render to a subregion of the
- * wnd. all coordinates passed to other rendering functions start from the top left corner of
- * this rectangle. */
-void Viewport(Wnd wnd, int x, int y, int width, int height);
-
-/* the initial color of a blank frame */
-void ClsCol(int color);
+typedef struct _Packer* Packer;
+typedef struct _Wnd* Wnd;
+typedef struct _Clk* Clk;
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                         MATH FUNCTIONS                                         */
@@ -205,7 +78,7 @@ Mat SetMat(Mat mat, float* matIn);
 Mat GetMat(Mat mat, float* matOut);
 Mat Scale(Mat mat, float x, float y);
 Mat Scale1(Mat mat, float scale);
-Mat Move(Mat mat, float x, float y);
+Mat Pos(Mat mat, float x, float y);
 Mat Rot(Mat mat, float deg);
 Mat MulMat(Mat mat, Mat other);
 Mat MulMatFlt(Mat mat, float* matIn);
@@ -418,9 +291,6 @@ void* ArrAllocEx(void** pArr, int elementSize, int numElements);
 /* attempts to efficiently pack rectangles inside a bigger rectangle. internally used to          */
 /* automatically stitch together all the imags and not have the renderer swap img every time.     */
 /* ---------------------------------------------------------------------------------------------- */
-
-/* opaque handle */
-typedef struct _Packer* Packer;
 
 Packer MkPacker(int width, int height);
 void RmPacker(Packer pak);
@@ -669,6 +539,132 @@ enum {
   LINEAR,
   LAST_IMG_FILTER
 };
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                        PLATFORM LAYER                                          */
+/*                                                                                                */
+/* you can either include Platform/Platform.h to use the built in sample platform layers or write */
+/* your own by defining these structs and funcs                                                   */
+/* ---------------------------------------------------------------------------------------------- */
+
+Wnd MkWnd();
+void RmWnd(Wnd wnd);
+void SetWndName(Wnd wnd, char* wndName);
+void SetWndClass(Wnd wnd, char* className);
+void SetWndSize(Wnd wnd, int width, int height);
+int WndWidth(Wnd wnd);
+int WndHeight(Wnd wnd);
+
+/* get time elapsed in seconds since the last SwpBufs. guaranteed to return non-zero even if
+ * no SwpBufs happened */
+float Delta(Wnd wnd);
+
+/* FPS limiter, 0 for unlimited. limiting happens in SwpBufs. note that unlimited fps still
+ * waits for the minimum timer resolution for GetTime */
+void SetWndFPS(Wnd wnd, int fps);
+
+/* fetch one message. returns non-zero as long as there are more */
+int NextMsg(Wnd wnd);
+
+/* sends QUIT message to the wnd */
+void PostQuitMsg(Wnd wnd);
+
+/* these funcs get data from the last message fetched by NextMsg */
+int MsgType(Wnd wnd);
+int Key(Wnd wnd);
+int KeyState(Wnd wnd);
+int MouseX(Wnd wnd);
+int MouseY(Wnd wnd);
+int MouseDX(Wnd wnd);
+int MouseDY(Wnd wnd);
+
+/* allocates n bytes and initializes memory to zero */
+void* Alloc(int n);
+
+/* reallocate p to new size n. memory that wasn't initialized is not guaranteed to be zero */
+void* Realloc(void* p, int n);
+
+void Free(void* p);
+void MemSet(void* p, unsigned char val, int n);
+void MemCpy(void* dst, void* src, int n);
+
+/* write data to disk. returns number of bytes written or < 0 for errors */
+int WrFile(char* path, void* data, int dataLen);
+
+/* read up to maxSize bytes from disk */
+int RdFile(char* path, void* data, int maxSize);
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                           RENDERER                                             */
+/*                                                                                                */
+/* you can either include Platform/Platform.h to use the built in sample renderers or write your  */
+/* own by defining these structs and funcs                                                        */
+/* ---------------------------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* Mesh is a collection of vertices that will be rendered using the same img and trans. try
+ * to batch up as much stuff into a mesh as possible for optimal performance. */
+
+Mesh MkMesh();
+void RmMesh(Mesh mesh);
+
+/* change current color. color is Argb 32-bit int (0xAARRGGBB). 255 alpha = completely transparent,
+ * 0 alpha = completely opaque */
+void Col(Mesh mesh, int color);
+
+/* these are for custom meshes.
+ * wrap Vert and Face calls between Begin and End.
+ * indices start at zero and we are indexing the vertices submitted between Begin and End. see the
+ * implementations of Quad and Tri for examples */
+void Begin(Mesh mesh);
+void End(Mesh mesh);
+void Vert(Mesh mesh, float x, float y);
+void ImgCoord(Mesh mesh, float u, float v);
+void Face(Mesh mesh, int i1, int i2, int i3);
+
+/* this is internally used to do img atlases and map relative uv's to the bigger image */
+void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
+
+/* ---------------------------------------------------------------------------------------------- */
+
+Img MkImg();
+void RmImg(Img img);
+
+/* set wrap mode for img coordinates. default is REPEAT */
+void SetImgWrapU(Img img, int mode);
+void SetImgWrapV(Img img, int mode);
+
+/* set min/mag filter for img. default is NEAREST */
+void SetImgMinFilter(Img img, int filter);
+void SetImgMagFilter(Img img, int filter);
+
+/* set the img's pix data. must be an array of 0xAARRGGBB colors as explained in Col.
+ * pixs are laid out row major - for example a 4x4 image would be:
+ * { px00, px10, px01, px11 }
+ * note that this is usually an expensive call. only update the img data when it's actually
+ * changing.
+ * return img for convenience */
+Img Pixs(Img img, int width, int height, int* data);
+
+/* same as Pixs but you can specify stride which is how many bytes are between the beginning
+ * of each row, for cases when you have extra padding or when you're submitting a sub-region of a
+ * bigger image */
+Img PixsEx(Img img, int width, int height, int* data, int stride);
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* flush all rendered geometry to the screen */
+void SwpBufs(Wnd wnd);
+
+/* set rendering rectangle from the top left of the wnd, in pixs. this is automatically called
+ * when the wnd is resized. it can also be called manually to render to a subregion of the
+ * wnd. all coordinates passed to other rendering functions start from the top left corner of
+ * this rectangle. */
+void Viewport(Wnd wnd, int x, int y, int width, int height);
+
+/* the initial color of a blank frame */
+void ClsCol(int color);
 
 #endif /* WEEBCORE_HEADER */
 
@@ -1063,12 +1059,12 @@ Trans SetRot(Trans trans, float deg) {
 }
 
 static Mat CalcTrans(Trans trans, Mat mat, int ortho) {
-  Move(mat, trans->x, trans->y);
+  Pos(mat, trans->x, trans->y);
   Rot(mat, trans->deg);
   if (!ortho) {
     Scale(mat, trans->sX, trans->sY);
   }
-  return Move(mat, -trans->oX, -trans->oY);
+  return Pos(mat, -trans->oX, -trans->oY);
 }
 
 Mat ToMat(Trans trans) { return CalcTrans(trans, MkMat(), 0); }
@@ -1666,7 +1662,7 @@ Mat Scale1(Mat mat, float scale) {
   return Scale(mat, scale, scale);
 }
 
-Mat Move(Mat mat, float x, float y) {
+Mat Pos(Mat mat, float x, float y) {
   float m[16] = MAT_IDENT;
   m[12] = x;
   m[13] = y;
