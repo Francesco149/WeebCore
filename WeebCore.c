@@ -610,7 +610,7 @@ Mesh MkMesh();
 void RmMesh(Mesh mesh);
 
 /* change current color. color is Argb 32-bit int (0xAARRGGBB). 255 alpha = completely transparent,
- * 0 alpha = completely opaque */
+ * 0 alpha = completely opaque. the default color for a mesh should be 0xffffff */
 void Col(Mesh mesh, int color);
 
 /* these are for custom meshes.
