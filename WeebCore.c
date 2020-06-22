@@ -10,20 +10,6 @@ typedef struct _Wnd* Wnd;
 typedef struct _Clk* Clk;
 
 /* ---------------------------------------------------------------------------------------------- */
-/*                                         MATH FUNCTIONS                                         */
-/*                                                                                                */
-/* you can either include Platform/Platform.h to use the built in sample implementations or write */
-/* your own by defining these funcs                                                               */
-/* ---------------------------------------------------------------------------------------------- */
-
-float FltMod(float x, float y); /* returns x modulo y */
-float Sin(float deg);
-float Cos(float deg);
-int Ceil(float x);
-int Floor(float x);
-float Sqrt(float x);
-
-/* ---------------------------------------------------------------------------------------------- */
 /*                                    BUILT-IN MATH FUNCTIONS                                     */
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -593,6 +579,20 @@ int WrFile(char* path, void* data, int dataLen);
 
 /* read up to maxSize bytes from disk */
 int RdFile(char* path, void* data, int maxSize);
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                         MATH FUNCTIONS                                         */
+/*                                                                                                */
+/* you can either include Platform/Platform.h to use the built in sample implementations or write */
+/* your own by defining these funcs                                                               */
+/* ---------------------------------------------------------------------------------------------- */
+
+float FltMod(float x, float y); /* returns x modulo y */
+float Sin(float deg);
+float Cos(float deg);
+int Ceil(float x);
+int Floor(float x);
+float Sqrt(float x);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                           RENDERER                                             */
