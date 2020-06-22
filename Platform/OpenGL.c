@@ -18,13 +18,6 @@ struct _Mesh {
 
 struct _Img { GLuint handle; int width, height; };
 
-enum {
-  SCALE,
-  TRANSLATE,
-  ROTATE,
-  LAST_OPERATION
-};
-
 /* convert a 0xAARRGGBB integer to OpenGL's 0xAABBGGRR.
  * also flip alpha because we use 0 = opaque */
 
