@@ -69,7 +69,6 @@ int RdFile(char* path, void* data, int maxSize);
 /* opaque handles */
 typedef struct _Mesh* Mesh;
 typedef struct _Img* Img;
-typedef struct _Mat* Mat;
 typedef struct _Trans* Trans;
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -96,38 +95,6 @@ void Face(Mesh mesh, int i1, int i2, int i3);
 
 /* this is internally used to do img atlases and map relative uv's to the bigger image */
 void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
-
-/* ---------------------------------------------------------------------------------------------- */
-
-/* OpenGL-like post-multiplied mat. mat memory layout is row major */
-
-Mat MkMat();
-void RmMat(Mat mat);
-Mat DupMat(Mat source);
-
-/* these return mat for convienience. it's not actually a copy */
-Mat SetIdentity(Mat mat);
-Mat SetMat(Mat mat, float* matIn);
-Mat GetMat(Mat mat, float* matOut);
-Mat Scale(Mat mat, float x, float y);
-Mat Scale1(Mat mat, float scale);
-Mat Move(Mat mat, float x, float y);
-Mat Rot(Mat mat, float deg);
-Mat MulMat(Mat mat, Mat other);
-Mat MulMatFlt(Mat mat, float* matIn);
-
-/* multiply a b and store the result in a new Mat */
-Mat MkMulMat(Mat matA, Mat matB);
-Mat MkMulMatFlt(Mat matA, float* matB);
-
-/* trans 2D point in place */
-void TransPt(Mat mat, float* point);
-
-/* trans 2D point in place by inverse of mat. note that this only works if the mat is orthogonal */
-void InvTransPt(Mat mat, float* point);
-
-/* note: this is a DIRECT pointer to the matrix data so if you modify it it will affect it */
-float* MatFlts(Mat mat);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -221,6 +188,40 @@ int RectInRect(float* needle, float* haystack);
 
 /* check that needle's area can entirely fit inside of haystack (ignores position) */
 int RectInRectArea(float* needle, float* haystack);
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* OpenGL-like post-multiplied mat. mat memory layout is row major */
+
+typedef struct _Mat* Mat;
+
+Mat MkMat();
+void RmMat(Mat mat);
+Mat DupMat(Mat source);
+
+/* these return mat for convienience. it's not actually a copy */
+Mat SetIdentity(Mat mat);
+Mat SetMat(Mat mat, float* matIn);
+Mat GetMat(Mat mat, float* matOut);
+Mat Scale(Mat mat, float x, float y);
+Mat Scale1(Mat mat, float scale);
+Mat Move(Mat mat, float x, float y);
+Mat Rot(Mat mat, float deg);
+Mat MulMat(Mat mat, Mat other);
+Mat MulMatFlt(Mat mat, float* matIn);
+
+/* multiply a b and store the result in a new Mat */
+Mat MkMulMat(Mat matA, Mat matB);
+Mat MkMulMatFlt(Mat matA, float* matB);
+
+/* trans 2D point in place */
+void TransPt(Mat mat, float* point);
+
+/* trans 2D point in place by inverse of mat. note that this only works if the mat is orthogonal */
+void InvTransPt(Mat mat, float* point);
+
+/* note: this is a DIRECT pointer to the matrix data so if you modify it it will affect it */
+float* MatFlts(Mat mat);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                          WBSPR FORMAT                                          */
