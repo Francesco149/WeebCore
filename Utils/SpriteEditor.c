@@ -796,7 +796,7 @@ void EdUpd() {
   }
 }
 
-void EdPaintPix(int x, int y, int col, int flags) {
+void EdPaintPix(int x, int y, int col, int paintFlags) {
   float rect[4];
   int fcol = col;
   SetRect(rect, 0, width, 0, height);
@@ -805,7 +805,7 @@ void EdPaintPix(int x, int y, int col, int flags) {
   }
   if (PtInRect(rect, x, y)) {
     int* px = &imgData[y * width + x];
-    if (flags & ED_FALPHA_BLEND) {
+    if (paintFlags & ED_FALPHA_BLEND) {
       /* normal alpha blending with whatever is currently here */
       fcol = AlphaBlend(col, *px);
     }
