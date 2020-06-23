@@ -2001,6 +2001,7 @@ static struct _Globals {
   char** argv;
   Wnd wnd;
   AppHandler* handlers[LAST_EVENT_TYPE];
+  int flags;
 
   /* params */
   char* name;
@@ -2023,15 +2024,33 @@ void On(int msg, AppHandler handler) {
   }
 }
 
+static void PruneHandlers(int msg) {
+  if (app.flags & DIRTY) {
+    int i;
+    AppHandler* handlers = app.handlers[msg];
+    AppHandler* newHandlers = 0;
+    for (i = 0; i < ArrLen(handlers); ++i) {
+      if (handlers[i]) {
+        ArrCat(&newHandlers, handlers[i]);
+      }
+    }
+    RmArr(handlers);
+    app.handlers[msg] = newHandlers;
+    app.flags &= ~DIRTY;
+  }
+}
+
+/* we cannot change the size of handlers because this could be called while iterating them.
+ * so we set a dirty flags that tells it to recompact the handlers array after we are done handling
+ * this event */
 void RmHandler(int msg, AppHandler handler) {
   if (msg >= 0 && msg < LAST_EVENT_TYPE) {
     int i;
     AppHandler* handlers = app.handlers[msg];
     for (i = 0; i < ArrLen(handlers); ++i) {
       if (handlers[i] == handler) {
-        MemMv(&handlers[i], &handlers[i + 1], (ArrLen(handlers) - i - 1) * sizeof(handlers[0]));
-        SetArrLen(handlers, ArrLen(handlers) - 1);
-        return;
+        handlers[i] = 0;
+        app.flags |= DIRTY;
       }
     }
   }
@@ -2088,6 +2107,7 @@ static void AppHandle(int msg) {
   for (i = 0; i < ArrLen(handlers); ++i) {
     handlers[i]();
   }
+  PruneHandlers(msg);
 }
 
 int AppMain(int argc, char* argv[]) {
