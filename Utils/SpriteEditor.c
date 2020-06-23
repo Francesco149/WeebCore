@@ -933,7 +933,7 @@ void EdPut() {
   }
   if (flags & ED_FHELP) {
     PutMesh(helpBgMesh, 0, 0);
-    PutMeshRaw(helpTextMesh, 0, FtImg(font));
+    PutMesh(helpTextMesh, 0, FtImg(font));
   }
   if (flags & ED_FANIM) {
     Mesh mesh;

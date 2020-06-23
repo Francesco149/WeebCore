@@ -17,15 +17,14 @@ typedef struct {
 Wnd wnd;
 Ent* ents;
 unsigned elapsed;
-int showAtlas, page;
 int frames, fps;
 float fpsTimer;
-Mesh atlas;
 Ft ft;
 Mesh text;
+int diagAllocator;
 
-void MkEnt(Ent** ents, unsigned elapsed) {
-  Ent* ent = ArrAlloc(ents, 1);
+void MkEnt() {
+  Ent* ent = ArrAlloc(&ents, 1);
   int* pixs = 0;
   int i;
   /* pseudorandom */
@@ -51,7 +50,7 @@ void MkEnt(Ent** ents, unsigned elapsed) {
   ent->trans = MkTrans();
 }
 
-void UpdEnts(Ent* ents) {
+void UpdEnts() {
   int i;
   float delta = Delta(wnd);
   for (i = 0; i < ArrLen(ents); ++i) {
@@ -76,39 +75,47 @@ void UpdEnts(Ent* ents) {
   }
 }
 
-void PutEnts(Ent* ents) {
+void PutEnts() {
   int i;
   for (i = 0; i < ArrLen(ents); ++i) {
     PutMesh(ents[i].mesh, ToTmpMat(ents[i].trans), ents[i].img);
   }
 }
 
-void RmEnts(Ent* ents) {
+void RmEnt(Ent* ent) {
+  RmTrans(ent->trans);
+  RmMesh(ent->mesh);
+}
+
+void RmEnts() {
   int i;
   for (i = 0; i < ArrLen(ents); ++i) {
-    RmTrans(ents[i].trans);
-    RmMesh(ents[i].mesh);
+    RmEnt(&ents[i]);
   }
   RmArr(ents);
 }
 
-void PutPageText(Ft ft, int page) {
-  char* pagestr = 0;
-  ArrStrCat(&pagestr, "page: ");
-  ArrStrCatI32(&pagestr, page, 10);
-  ArrCat(&pagestr, 0);
-  PutFt(ft, 0xbebebe, WndWidth(wnd) - StrLen(pagestr) * 6 - 10, 10, pagestr);
-  RmArr(pagestr);
+void RmEntAt(int i) {
+  if (i >= 0 && i < ArrLen(ents)) {
+    Ent* e = &ents[i];
+    /* for better visualization, blank out the freed img */
+    int* black = Alloc(RectWidth(e->r) * RectHeight(e->r) * sizeof(int));
+    ImgCpy(e->img, black, RectWidth(e->r) + 0.5f, RectHeight(e->r) + 0.5f);
+    FlushImgs();
+    Free(black);
+    ImgFree(e->img);
+    RmEnt(e);
+    MemMv(e, e + 1, sizeof(Ent) * (ArrLen(ents) - i - 1));
+    SetArrLen(ents, ArrLen(ents) - 1);
+  }
 }
 
-void PutStatsText(Ft ft, int fps, int ents, int pages) {
+void PutStatsText() {
   char* pagestr = 0;
   ArrStrCat(&pagestr, "fps: ");
   ArrStrCatI32(&pagestr, fps, 10);
   ArrStrCat(&pagestr, " quads: ");
-  ArrStrCatI32(&pagestr, ents, 10);
-  ArrStrCat(&pagestr, " textures: ");
-  ArrStrCatI32(&pagestr, pages, 10);
+  ArrStrCatI32(&pagestr, ArrLen(ents), 10);
   ArrCat(&pagestr, 0);
   PutFt(ft, 0xbebebe, 10, WndHeight(wnd) - 21, pagestr);
   RmArr(pagestr);
@@ -116,57 +123,41 @@ void PutStatsText(Ft ft, int fps, int ents, int pages) {
 
 void Init() {
   wnd = AppWnd();
-  atlas = MkMesh();
   ft = DefFt();
   text = MkMesh();
   Col(text, 0xbebebe);
-  FtMesh(text, ft, 10, 10, "space to spawn random quads\n"
+  FtMesh(text, ft, 10, 10, "space to spawn random quads\nbackspace to free the oldest quad\n"
     "F1 to see the texture atlas\nmouse wheel to switch pages");
-  Quad(atlas, 0, 0, 1024, 1024);
 }
 
 void Quit() {
-  RmEnts(ents);
+  RmEnts();
   RmMesh(text);
-  RmMesh(atlas);
-  RmFt(ft);
 }
 
 void KeyDown() {
   switch (Key(wnd)) {
     case SPACE: {
-      MkEnt(&ents, elapsed);
+      MkEnt();
+      break;
+    }
+    case BACKSPACE: {
+      RmEntAt(0);
       break;
     }
     case F1: {
-      showAtlas ^= 1;
-      break;
-    }
-    case MWHEELUP: {
-      page = Max(0, Min(page + 1, DiagPageCount() - 1));
-      break;
-    }
-    case MWHEELDOWN: {
-      page = Max(page - 1, 0);
+      diagAllocator ^= 1;
+      DiagImgAlloc(diagAllocator);
       break;
     }
   }
 }
 
 void Frame() {
-  UpdEnts(ents);
-
-  if (showAtlas) {
-    if (DiagPageCount()) {
-      PutMeshRaw(atlas, 0, DiagPage(page));
-    }
-    PutPageText(ft, page);
-  } else {
-    PutEnts(ents);
-  }
-
-  PutMeshRaw(text, 0, FtImg(ft));
-  PutStatsText(ft, fps, ArrLen(ents), DiagPageCount());
+  UpdEnts();
+  PutEnts();
+  PutMesh(text, 0, FtImg(ft));
+  PutStatsText();
 
   elapsed += (int)(Delta() * 1000000000);
 

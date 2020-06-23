@@ -101,9 +101,9 @@ void Frame() {
     PutMesh(mesh, 0, 0);
     RmMesh(mesh);
   }
-  PutMeshRaw(help, 0, FtImg(font));
+  PutMesh(help, 0, FtImg(font));
   if (isFull) {
-    PutMeshRaw(full, 0, FtImg(font));
+    PutMesh(full, 0, FtImg(font));
   }
 }
 

@@ -29,8 +29,8 @@ void Quit() {
 }
 
 void Frame() {
-  PutMeshRaw(mesh, 0, FtImg(ft));
-  PutMeshRaw(mesh, ToTmpMat(trans), FtImg(ft));
+  PutMesh(mesh, 0, FtImg(ft));
+  PutMesh(mesh, ToTmpMat(trans), FtImg(ft));
 }
 
 void AppInit() {

@@ -54,6 +54,7 @@ void PutMesh(Mesh mesh, Mat mat, ImgPtr ptr);
 
 Wnd AppWnd();
 ImgPtr ImgAlloc(int width, int height);
+void ImgFree(ImgPtr img);
 
 /* copy raw pixels dx, dy in the img. anything outside the img size is cropped out.
  * note that this replaces pixels. it doesn't do any kind of alpha blending */
@@ -289,7 +290,7 @@ Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight);
 Ft DefFt();
 
 void RmFt(Ft ft);
-Img FtImg(Ft ft);
+ImgPtr FtImg(Ft ft);
 
 /* generate vertices and uv's for drawing string. must be rendered with the ft img from
  * FtImg or a img that has the same exact layout */
@@ -348,6 +349,9 @@ void RmPacker(Packer pak);
  *
  * returns NULL if rect doesn't fit */
 float* Pack(Packer pak, float* rect);
+
+/* mark rect as a free area. this can be used to remove already packed rects */
+void PackFree(Packer pak, float* rect);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                   MISC UTILS AND MACROS                                        */
@@ -619,19 +623,8 @@ void RmApp();
  * this also takes care of calling pseudo msgs like INIT, FRAME and calling SwpBufs */
 int AppMain(int argc, char* argv[]);
 
-/* the Diag* api's are mainly used internally for debugging and diagnostics */
-int DiagPageCount();
-Img DiagPage(int page);
-int* DiagPagePixs(int page);
-Packer DiagPagePacker(int page);
-int DiagPageFlags(int page);
-float* DiagRegion(ImgPtr ptr);
-
-void DiagSetPage(int page, Img img);
-void DiagSetPagePixs(int page, int* pixs);
-void DiagSetPagePacker(int page, Packer pak);
-void DiagSetPageFlags(int page, int flags);
-void DiagSetRegion(ImgPtr ptr, float left, float right, float top, float bot);
+/* enable debug ui for the img allocator */
+void DiagImgAlloc(int enabled);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                        PLATFORM LAYER                                          */
@@ -972,6 +965,12 @@ float* Pack(Packer pak, float* rect) {
   PakSplit(pak, rect);
   PakPrune(pak);
   return rect;
+}
+
+void PackFree(Packer pak, float* rect) {
+  /* TODO: figure out a good way to defragment the free rects */
+  ArrCatRectFlts(&pak->rects, rect);
+  PakPrune(pak);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -1474,7 +1473,7 @@ void AlphaBlendp(int* dst, int src) {
 /* ---------------------------------------------------------------------------------------------- */
 
 struct _Ft {
-  Img img;
+  ImgPtr img;
   int charWidth, charHeight;
 };
 
@@ -1483,12 +1482,12 @@ Ft MkFtFromSimpleGrid(int* pixs, int width, int height, int charWidth, int charH
   if (ft) {
     int* decolored = 0;
     int i;
-    ft->img = MkImg();
+    ft->img = ImgAlloc(width, height);
     for (i = 0; i < width * height; ++i) {
       /* we want the base pixs to be white so it can be colored */
       ArrCat(&decolored, pixs[i] | 0xffffff);
     }
-    Pixs(ft->img, width, height, decolored);
+    ImgCpy(ft->img, decolored, width, height);
     RmArr(decolored);
     ft->charWidth = charWidth;
     ft->charHeight = charHeight;
@@ -1512,63 +1511,12 @@ Ft MkFtFromSimpleGridFile(char* filePath, int charWidth, int charHeight) {
 
 void RmFt(Ft ft) {
   if (ft) {
-    RmImg(ft->img);
+    ImgFree(ft->img);
   }
   Free(ft);
 }
 
-Img FtImg(Ft ft) { return ft->img; }
-
-static int* PadPixs(int* pixs, int width, int height, int newWidth, int newHeight) {
-  int* newPixs = 0;
-  int x, y;
-  for (y = 0; y < newHeight; ++y) {
-    if (y < height) {
-      for (x = 0; x < newWidth; ++x) {
-        if (x < width) {
-          ArrCat(&newPixs, pixs[y * width + x]);
-        } else {
-          ArrCat(&newPixs, 0xff000000);
-        }
-      }
-    } else {
-      ArrCat(&newPixs, 0xff000000);
-    }
-  }
-  return newPixs;
-}
-
-Ft DefFt() {
-  /* generated from ft.wbspr using the SpriteEditor */
-  static char* b64Data =
-    "AIUQIQYIIIAAAAAEcIccE+c+ccAAAAAcAIUUcokIQEIIAAAEiYiiMgiCiiIIAAAiAIU0oSoAQEqIAAAImICCUggEiiAAEA"
-    "QCAIAecMQAQEc+AcAIqIEMk88EceAAIcIEAIA0KQqAQEqIAAAQyIICkCiIiCAAQAEIAIAe8kkAQEIIAAAQiIQC+CiIiCAA"
-    "IcIIAAAUIKkAQEAAEAIgiIgiECiQiiIIEAQAAIAEIEaAIIAAIAAgcc+cE8cQccAQAAAIAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcc8e8++cicOigiic8c8e+iii"
-    "ii+MQYIAmiigiggiiIEig2yiiiigIiiiiiCIQIUAqiigigggiIEkgqqiiiigIiiiUUEIIIiAq+8gi88u+IE4gimi8i8cIi"
-    "iqIIIIIIAAsiigiggiiIEkgiiigqiCIiiqUIQIIIAAiiigiggiiIEigiiigmiCIii2iIgIEIAAiiigiggiiIkigiiigiiC"
-    "IiUiiIgIEIAAci8e8+gcicYi+iicgci8IcIiiI+MEYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAgACAMAgIIgYAAAAAAAQAAAAAAEIIAAQAgACAQAgAAgIAAA"
-    "AAAAQAAAAAAIIEAAIc8eecQe8YYkI08c8e8e8iiiii+IIEAAACigii8iiIIkIqiiiiigQiiiUiEIIEYAAeigi+QiiII4Iq"
-    "iiiigcQiiiIiIQICqIAiigigQiiIIkIqiiiigCQiiqUiQIIEMAAiigigQiiIIiIiiiiigCQiUqiigIIEAAAe8eeeQeicIi"
-    "ciic8eg8MeIUie+IIEAAAAAAAAACAAIAAAAAgCAAAAAAACAEIIAAAAAAAAAcAAQAAAAAgCAAAAAAAcAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAA";
-  char* data = ArrFromB64(b64Data);
-  int* pixs = OneBppArrToArgb(data);
-  int charWidth = 6;
-  int charHeight = 11;
-  int width = charWidth * 0x20;
-  int height = charHeight * 3;
-  /* temporarily pad it to power-of-two size until I have an actual rectangle packer */
-  int potWidth = RoundUpToPowerOfTwo(width);
-  int potHeight = RoundUpToPowerOfTwo(height);
-  int* potPixs = PadPixs(pixs, width, height, potWidth, potHeight);
-  Ft ft = MkFtFromSimpleGrid(potPixs, potWidth, potHeight, charWidth, charHeight);
-  RmArr(data);
-  RmArr(pixs);
-  RmArr(potPixs);
-  return ft;
-}
+ImgPtr FtImg(Ft ft) { return ft->img; }
 
 void FtMesh(Mesh mesh, Ft ft, int x, int y, char* string) {
   char c;
@@ -1592,7 +1540,7 @@ void PutFt(Ft ft, int col, int x, int y, char* string) {
   Mesh mesh = MkMesh();
   Col(mesh, col);
   FtMesh(mesh, ft, x, y, string);
-  PutMeshRaw(mesh, 0, FtImg(ft));
+  PutMesh(mesh, 0, FtImg(ft));
   RmMesh(mesh);
 }
 
@@ -2023,11 +1971,14 @@ static struct _Globals {
   Wnd wnd;
   AppHandler* handlers[LAST_MSG_TYPE];
   int flags;
+  Ft ft;
 
   /* img allocator */
   ImgPage* pages;
   ImgRegion* regions;
   float flushTimer;
+
+  int diagPage;
 } app;
 
 Wnd AppWnd() { return app.wnd; }
@@ -2081,22 +2032,6 @@ void SetAppName(char* name) { app.name = name; }
 void SetAppClass(char* class) { app.class = class; }
 void SetAppPageSize(int pageSize) { app.pageSize = pageSize; }
 
-int DiagPageCount() { return ArrLen(app.pages); }
-Img DiagPage(int page) { return app.pages[page].img; }
-int* DiagPagePixs(int page) { return app.pages[page].pixs; }
-Packer DiagPagePacker(int page) { return app.pages[page].pak; }
-int DiagPageFlags(int page) { return app.pages[page].flags; }
-
-void DiagSetPage(int page, Img img) { app.pages[page].img = img; }
-void DiagSetPagePixs(int page, int* pixs) { app.pages[page].pixs = pixs; }
-void DiagSetPagePacker(int page, Packer pak) { app.pages[page].pak = pak; }
-void DiagSetPageFlags(int page, int flags) { app.pages[page].flags = flags; }
-
-void SetImgAllocRegion(ImgPtr ptr, float left, float right, float top, float bot) {
-  SetRect(app.regions[ptr - 1].r, left, right, top, bot);
-}
-
-float* ImgAllocRegion(ImgPtr ptr) { return app.regions[ptr - 1].r; }
 
 static void AppHandle(int msg) {
   AppHandler* handlers = app.handlers[msg];
@@ -2107,6 +2042,35 @@ static void AppHandle(int msg) {
   PruneHandlers();
 }
 
+static Ft MkDefFt() {
+  /* generated from ft.wbspr using the SpriteEditor */
+  static char* b64Data =
+    "AIUQIQYIIIAAAAAEcIccE+c+ccAAAAAcAIUUcokIQEIIAAAEiYiiMgiCiiIIAAAiAIU0oSoAQEqIAAAImICCUggEiiAAEA"
+    "QCAIAecMQAQEc+AcAIqIEMk88EceAAIcIEAIA0KQqAQEqIAAAQyIICkCiIiCAAQAEIAIAe8kkAQEIIAAAQiIQC+CiIiCAA"
+    "IcIIAAAUIKkAQEAAEAIgiIgiECiQiiIIEAQAAIAEIEaAIIAAIAAgcc+cE8cQccAQAAAIAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcc8e8++cicOigiic8c8e+iii"
+    "ii+MQYIAmiigiggiiIEig2yiiiigIiiiiiCIQIUAqiigigggiIEkgqqiiiigIiiiUUEIIIiAq+8gi88u+IE4gimi8i8cIi"
+    "iqIIIIIIAAsiigiggiiIEkgiiigqiCIiiqUIQIIIAAiiigiggiiIEigiiigmiCIii2iIgIEIAAiiigiggiiIkigiiigiiC"
+    "IiUiiIgIEIAAci8e8+gcicYi+iicgci8IcIiiI+MEYA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAgACAMAgIIgYAAAAAAAQAAAAAAEIIAAQAgACAQAgAAgIAAA"
+    "AAAAQAAAAAAIIEAAIc8eecQe8YYkI08c8e8e8iiiii+IIEAAACigii8iiIIkIqiiiiigQiiiUiEIIEYAAeigi+QiiII4Iq"
+    "iiiigcQiiiIiIQICqIAiigigQiiIIkIqiiiigCQiiqUiQIIEMAAiigigQiiIIiIiiiiigCQiUqiigIIEAAAe8eeeQeicIi"
+    "ciic8eg8MeIUie+IIEAAAAAAAAACAAIAAAAAgCAAAAAAACAEIIAAAAAAAAAcAAQAAAAAgCAAAAAAAcAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAA";
+  char* data = ArrFromB64(b64Data);
+  int* pixs = OneBppArrToArgb(data);
+  int charWidth = 6;
+  int charHeight = 11;
+  int width = charWidth * 0x20;
+  int height = charHeight * 3;
+  Ft ft = MkFtFromSimpleGrid(pixs, width, height, charWidth, charHeight);
+  RmArr(data);
+  RmArr(pixs);
+  return ft;
+}
+
+Ft DefFt() { return app.ft; }
+
 void MkApp(int argc, char* argv[]) {
   app.argc = argc;
   app.argv = argv;
@@ -2115,6 +2079,7 @@ void MkApp(int argc, char* argv[]) {
   if (!app.class) { app.class = "WeebCore"; }
   app.wnd = MkWnd(app.name, app.class);
   app.flags |= RUNNING;
+  app.ft = MkDefFt();
   AppHandle(INIT);
   FlushImgs();
 }
@@ -2168,9 +2133,9 @@ int AppMain(int argc, char* argv[]) {
 }
 
 ImgPtr ImgAlloc(int width, int height) {
-  ImgRegion* region;
+  ImgRegion* region = 0;
   float r[4];
-  int i;
+  int i, pageIdx;
   ImgPage* page = 0;
   SetRect(r, 0, width, 0, height);
   for (i = 0; i < ArrLen(app.pages); ++i) {
@@ -2179,7 +2144,8 @@ ImgPtr ImgAlloc(int width, int height) {
       break;
     }
   }
-  if (i >= ArrLen(app.pages)) {
+  pageIdx = i;
+  if (pageIdx >= ArrLen(app.pages)) {
     /* no free pages, make a new page */
     page = ArrAlloc(&app.pages, 1);
     page->img = MkImg();
@@ -2189,12 +2155,19 @@ ImgPtr ImgAlloc(int width, int height) {
       return 0;
     }
   }
-  region = ArrAlloc(&app.regions, 1);
+  for (i = 0; i < ArrLen(app.regions); ++i) {
+    if (app.regions[i].page < 0) {
+      region = &app.regions[i];
+    }
+  }
+  if (!region) {
+    region = ArrAlloc(&app.regions, 1);
+  }
   if (region) {
     CpyRect(region->r, r);
-    region->page = i;
+    region->page = pageIdx;
   }
-  return ArrLen(app.regions);
+  return region - app.regions + 1;
 }
 
 void ImgCpyEx(ImgPtr ptr, int* pixs, int width, int height, int dx, int dy) {
@@ -2202,6 +2175,7 @@ void ImgCpyEx(ImgPtr ptr, int* pixs, int width, int height, int dx, int dy) {
     ImgRegion* region = &app.regions[ptr - 1];
     ImgPage* page = &app.pages[region->page];
     float* r = region->r;
+    int pixsStride = width;
     int x, y;
     int left = 0, top = 0;
     int right = dx + width;
@@ -2212,14 +2186,14 @@ void ImgCpyEx(ImgPtr ptr, int* pixs, int width, int height, int dx, int dy) {
       width -= right - (int)RectWidth(r);
     }
     if (bot > RectHeight(r)) {
-      height -= bot - (int)RectWidth(r);
+      height -= bot - (int)RectHeight(r);
     }
     for (y = top; y < height; ++y) {
       for (x = left; x < width; ++x) {
         int dstx = RectX(r) + x + dx;
         int dsty = RectY(r) + y + dy;
         int* dstpix = &page->pixs[dsty * app.pageSize + dstx];
-        int srcpix = pixs[y * width + x];
+        int srcpix = pixs[y * pixsStride + x];
         if (*dstpix != srcpix) {
           *dstpix = srcpix;
           page->flags |= DIRTY;
@@ -2257,12 +2231,86 @@ ImgPtr ImgFromSprFile(char* path) {
   return res;
 }
 
+void ImgFree(ImgPtr img) {
+  ImgRegion* region = &app.regions[img - 1];
+  PackFree(app.pages[region->page].pak, region->r);
+  region->page = -1;
+}
+
 void PutMesh(Mesh mesh, Mat mat, ImgPtr ptr) {
   if (ptr) {
     ImgRegion* region = &app.regions[ptr - 1];
     PutMeshRawEx(mesh, mat, app.pages[region->page].img, RectX(region->r), RectY(region->r));
   } else {
     PutMeshRaw(mesh, mat, 0);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+
+static void DiagImgAllocKeyDown() {
+  Wnd wnd = AppWnd();
+  switch (Key(wnd)) {
+    case MWHEELUP: {
+      app.diagPage = Max(0, Min(app.diagPage + 1, ArrLen(app.pages) - 1));
+      break;
+    }
+    case MWHEELDOWN: {
+      app.diagPage = Max(app.diagPage - 1, 0);
+      break;
+    }
+  }
+}
+
+static void PutPageText() {
+  char* pagestr = 0;
+  ArrStrCat(&pagestr, "ImgAllocator Diag - page ");
+  ArrStrCatI32(&pagestr, app.diagPage + 1, 10);
+  ArrCat(&pagestr, '/');
+  ArrStrCatI32(&pagestr, ArrLen(app.pages), 10);
+  ArrCat(&pagestr, 0);
+  PutFt(DefFt(), 0xbebebe, 10, 10, pagestr);
+  RmArr(pagestr);
+}
+
+static void DiagImgAllocFrame() {
+  if (ArrLen(app.pages)) {
+    ImgPage* page = &app.pages[app.diagPage];
+    int i;
+    /* black background */
+    Mesh mesh = MkMesh();
+    Col(mesh, 0x000000);
+    Quad(mesh, 0, 0, app.pageSize + 10, app.pageSize + 40);
+    PutMesh(mesh, 0, 0);
+    RmMesh(mesh);
+    /* display entire page */
+    mesh = MkMesh();
+    Quad(mesh, 10, 30, app.pageSize, app.pageSize);
+    PutMeshRaw(mesh, 0, page->img);
+    RmMesh(mesh);
+    /* rect packer region grid */
+    mesh = MkMesh();
+    Col(mesh, 0x00ff00);
+    for (i = 0; i < ArrLen(page->pak->rects); ++i) {
+      float* r = page->pak->rects[i].r;
+      Quad(mesh, 10 + r[0], 30 + r[2], 1, RectHeight(r));
+      Quad(mesh, 10 + r[1], 30 + r[2], 1, RectHeight(r));
+      Quad(mesh, 10 + r[0], 30 + r[2], RectWidth(r), 1);
+      Quad(mesh, 10 + r[0], 30 + r[3], RectWidth(r), 1);
+    }
+    PutMeshRaw(mesh, 0, 0);
+    RmMesh(mesh);
+  }
+  PutPageText();
+}
+
+void DiagImgAlloc(int enabled) {
+  if (enabled) {
+    On(KEYDOWN, DiagImgAllocKeyDown);
+    On(FRAME, DiagImgAllocFrame);
+  } else {
+    RmHandler(KEYDOWN, DiagImgAllocKeyDown);
+    RmHandler(FRAME, DiagImgAllocFrame);
   }
 }
 
