@@ -2268,6 +2268,10 @@ static void PutPageText() {
   ArrStrCatI32(&pagestr, app.diagPage + 1, 10);
   ArrCat(&pagestr, '/');
   ArrStrCatI32(&pagestr, ArrLen(app.pages), 10);
+  ArrStrCat(&pagestr, ", ");
+  ArrStrCatI32(&pagestr, app.pageSize, 10);
+  ArrCat(&pagestr, 'x');
+  ArrStrCatI32(&pagestr, app.pageSize, 10);
   ArrCat(&pagestr, 0);
   PutFt(DefFt(), 0xbebebe, 10, 10, pagestr);
   RmArr(pagestr);
