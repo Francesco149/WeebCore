@@ -2033,7 +2033,7 @@ static void PruneHandlers() {
       AppHandler* handlers = app.handlers[msg];
       AppHandler* newHandlers = 0;
       for (i = 0; i < ArrLen(handlers); ++i) {
-        if (handlers[i] == Nop) {
+        if (handlers[i] != Nop) {
           ArrCat(&newHandlers, handlers[i]);
         }
       }
