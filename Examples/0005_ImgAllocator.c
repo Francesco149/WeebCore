@@ -93,6 +93,7 @@ void RmEnts() {
     RmEnt(&ents[i]);
   }
   RmArr(ents);
+  ents = 0;
 }
 
 void RmEntAt(int i) {
@@ -127,7 +128,7 @@ void Init() {
   text = MkMesh();
   Col(text, 0xbebebe);
   FtMesh(text, ft, 10, 10, "space to spawn random quads\nbackspace to free the oldest quad\n"
-    "F1 to see the texture atlas\nmouse wheel to switch pages");
+    "F2 to reset the allocator\nF1 to see the texture atlas\nmouse wheel to switch pages");
 }
 
 void Quit() {
@@ -148,6 +149,12 @@ void KeyDown() {
     case F1: {
       diagAllocator ^= 1;
       DiagImgAlloc(diagAllocator);
+      break;
+    }
+    case F2: {
+      RmEnts();
+      ClrImgs();
+      FlushImgs();
       break;
     }
   }
