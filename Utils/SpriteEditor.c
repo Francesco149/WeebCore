@@ -1,4 +1,4 @@
-/* very rough sprite ed, will improve/rewrite as I move features into the engine. this is mainly
+/* very rough sprite will improve/rewrite as I move features into the engine. this is mainly
  * to bootstrap making fonts and simple sprites so I can work on text rendering and ui entirely
  * off my own tools */
 
@@ -84,66 +84,65 @@ typedef struct _EDUpd {
   int flags;
 } EDUpd;
 
-typedef struct _Ed {
-  Wnd wnd;
-  int flags;
-  float oX, oY;
-  float cX, cY;
-  int wishX, wishY;
-  float flushTimer; /* TODO: built in timer events */
-  int scale;
-  int cols[2];
-  int colIndex;
-  Img checkerImg;
-  Mesh mesh;
-  Img img;
-  int* imgData;
-  EDUpd* updates;
-  Trans trans;
-  int tool;
-  int width, height;
-  int lastPutX, lastPutY;
+Wnd wnd;
 
-  Ft font;
-  Mesh helpTextMesh, helpBgMesh;
+int flags;
+float oX, oY;
+float cX, cY;
+int wishX, wishY;
+float flushTimer; /* TODO: built in timer events */
+int scale;
+int cols[2];
+int colIndex;
+Img checkerImg;
+Mesh mesh;
+Img img;
+int* imgData;
+EDUpd* updates;
+Trans trans;
+int tool;
+int width, height;
+int lastPutX, lastPutY;
 
-  float selBlinkTimer;
-  Img selBorderImg;
-  float selRect[4];          /* raw rectangle between the cursor and the initial drag position */
-  float effectiveSelRect[4]; /* normalized, snapped, etc selection rect */
-  int selAnchor;
+Ft font;
+Mesh helpTextMesh, helpBgMesh;
 
-  float animTimer;
-  int animSpeed;
-  float animRect[4];
-  float animStartRect[4];
+float selBlinkTimer;
+Img selBorderImg;
+float selRect[4];          /* raw rectangle between the cursor and the initial drag position */
+float effectiveSelRect[4]; /* normalizsnappetc selection rect */
+int selAnchor;
 
-  Img cutImg;
-  int* cutData;
-  float cutPotRect[4]; /* power of two size of the cut img */
-  Mesh cutMesh;
-  Trans cutTrans;
-  float cutSourceRect[4]; /* the location from where the cut data was taken */
+float animTimer;
+int animSpeed;
+float animRect[4];
+float animStartRect[4];
 
-  /* TODO: pull out col picker as a reusable widget */
-  Mesh colPickerMesh;
-  Trans colPickerTrans;
-  int colPickerSize;
-  int grey;
-  float colX, colY, greyY, alphaY;
-  char* filePath;
-}* Ed;
+Img cutImg;
+int* cutData;
+float cutPotRect[4]; /* power of two size of the cut img */
+Mesh cutMesh;
+Trans cutTrans;
+float cutSourceRect[4]; /* the location from where the cut data was taken */
 
-void EdMapToImg(Ed ed, float* point);
-void EdFlushUpds(Ed ed);
-void EdClrSelection(Ed ed);
-void EdUpdMesh(Ed ed);
-void EdClrPanning(Ed ed);
-void EdSelectedRect(Ed ed, float* rect);
-void EdClrPaintRateLimiter(Ed ed);
-int EdUpdPaintRateLimiter(Ed ed);
+/* TODO: pull out col picker as a reusable widget */
+Mesh colPickerMesh;
+Trans colPickerTrans;
+int colPickerSize;
+int grey;
+float colX, colY, greyY, alphaY;
+char* filePath;
+
+void EdMapToImg(float* point);
+void EdFlushUpds();
+void EdClrSelection();
+void EdUpdMesh();
+void EdClrPanning();
+void EdSelectedRect(float* rect);
+void EdClrPaintRateLimiter();
+int EdUpdPaintRateLimiter();
 int EdSampleCheckerboard(float x, float y);
-void EdPaintPix(Ed ed, int x, int y, int col, int flags);
+void EdPaintPix(int x, int y, int col, int flags);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -158,8 +157,7 @@ void EdPaintPix(Ed ed, int x, int y, int col, int flags);
 #define CPICK_ABAR_LEFT (CPICK_BBAR_LEFT + CPICK_BAR_WIDTH + CPICK_MARGIN)
 #define CPICK_ABAR_RIGHT (CPICK_ABAR_LEFT + CPICK_BAR_WIDTH)
 
-int EdColPickerSize(Ed ed) {
-  Wnd wnd = ed->wnd;
+int EdColPickerSize() {
   int winSize = Min(WndWidth(wnd), WndHeight(wnd));
   int size = RoundUpToPowerOfTwo(winSize / 4);
   size = Max(size, 256);
@@ -167,102 +165,100 @@ int EdColPickerSize(Ed ed) {
   return size;
 }
 
-Mesh EdCreateColPickerMesh(int grey) {
+Mesh EdCreateColPickerMesh() {
   Mesh mesh = MkMesh();
-  int cols[7] = { 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
+  int gradient[7] = { 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
   int brightness[3] = { 0xffffff, 0xff000000, 0x000000 };
   int brightnessSelect[2] = { 0xffffff, 0x000000 };
   int alphaSelect[2] = { 0x00ffffff, 0xff000000 };
   brightness[0] = grey;
-  QuadGradH(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 7, cols);
+  QuadGradH(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 7, gradient);
   QuadGradV(mesh, 0, 0, CPICK_WIDTH, CPICK_HEIGHT, 3, brightness);
   QuadGradV(mesh, CPICK_BBAR_LEFT, 0, CPICK_BAR_WIDTH, CPICK_HEIGHT, 2, brightnessSelect);
   QuadGradV(mesh, CPICK_ABAR_LEFT, 0, CPICK_BAR_WIDTH, CPICK_HEIGHT, 2, alphaSelect);
   return mesh;
 }
 
-void EdPutColPicker(Ed ed) {
+void EdPutColPicker() {
   float colsY = 0;
   Mesh mesh = MkMesh();
-  if (ed->flags & ED_FEXPAND_COLOR_PICKER) {
+  if (flags & ED_FEXPAND_COLOR_PICKER) {
     colsY = CPICK_HEIGHT + CPICK_MARGIN;
-    Col(mesh, Mix(ed->grey, 0xff0000, 0.5));
-    Quad(mesh, CPICK_BBAR_LEFT, ed->greyY - 1/128.0f, 1/16.0f, 1/64.0f);
+    Col(mesh, Mix(grey, 0xff0000, 0.5));
+    Quad(mesh, CPICK_BBAR_LEFT, greyY - 1/128.0f, 1/16.0f, 1/64.0f);
     Col(mesh, 0x000000);
-    Quad(mesh, CPICK_ABAR_LEFT, ed->alphaY - 1/128.0f, 1/16.0f, 1/64.0f);
-    Col(mesh, ~ed->cols[ed->colIndex] & 0xffffff);
-    Quad(mesh, ed->colX - 1/128.0f, ed->colY - 1/128.0f, 1/64.0f, 1/64.0f);
+    Quad(mesh, CPICK_ABAR_LEFT, alphaY - 1/128.0f, 1/16.0f, 1/64.0f);
+    Col(mesh, ~cols[colIndex] & 0xffffff);
+    Quad(mesh, colX - 1/128.0f, colY - 1/128.0f, 1/64.0f, 1/64.0f);
     Col(mesh, 0x000000);
-    Quad(mesh, ed->colX - 1/256.0f, ed->colY - 1/256.0f, 1/128.0f, 1/128.0f);
-    PutMesh(ed->colPickerMesh, ToTmpMat(ed->colPickerTrans), 0);
+    Quad(mesh, colX - 1/256.0f, colY - 1/256.0f, 1/128.0f, 1/128.0f);
+    PutMesh(colPickerMesh, ToTmpMat(colPickerTrans), 0);
   }
-  Col(mesh, ed->cols[0]);
+  Col(mesh, cols[0]);
   Quad(mesh, 0, colsY         , 1/8.0f, 1/8.0f);
-  Col(mesh, ed->cols[1]);
+  Col(mesh, cols[1]);
   Quad(mesh, 0, colsY + 1/8.0f, 1/8.0f, 1/8.0f);
-  PutMesh(mesh, ToTmpMat(ed->colPickerTrans), 0);
+  PutMesh(mesh, ToTmpMat(colPickerTrans), 0);
   RmMesh(mesh);
 }
 
-void EdSizeColPicker(Ed ed) {
-  Trans trans = ed->colPickerTrans;
-  ed->colPickerSize = EdColPickerSize(ed);
+void EdSizeColPicker() {
+  Trans trans = colPickerTrans;
+  colPickerSize = EdColPickerSize();
   ClrTrans(trans);
   SetPos(trans, 10, 10);
-  SetScale1(trans, ed->colPickerSize);
+  SetScale1(trans, colPickerSize);
 }
 
-void EdUpdColPickerMesh(Ed ed) {
-  RmMesh(ed->colPickerMesh);
-  ed->colPickerMesh = EdCreateColPickerMesh(ed->grey);
+void EdUpdColPickerMesh() {
+  RmMesh(colPickerMesh);
+  colPickerMesh = EdCreateColPickerMesh();
 }
 
-void EdMixPickEdCol(Ed ed) {
-  float x = ed->colX;
-  float y = ed->colY;
-  int cols[7] = { 0xff0000, 0xffff00, 0x00ff00,
-    0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
+void EdMixPickedCol() {
+  float x = colX;
+  float y = colY;
+  int gradient[7] = { 0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff, 0xff0000 };
   int i = (int)(x * 6);
-  int baseCol = Mix(cols[i], cols[i + 1], (x * 6) - i);
-  ed->grey = 0x010101 * (int)((1 - ed->greyY) * 0xff);
+  int baseCol = Mix(gradient[i], gradient[i + 1], (x * 6) - i);
+  grey = 0x010101 * (int)((1 - greyY) * 0xff);
   if (y <= 0.5f) {
-    ed->cols[ed->colIndex] = Mix(ed->grey, baseCol, y * 2);
+    cols[colIndex] = Mix(grey, baseCol, y * 2);
   } else {
-    ed->cols[ed->colIndex] = Mix(baseCol, 0x000000, (y - 0.5f) * 2);
+    cols[colIndex] = Mix(baseCol, 0x000000, (y - 0.5f) * 2);
   }
-  ed->cols[ed->colIndex] |= (int)(ed->alphaY * 0xff) << 24;
-  EdUpdColPickerMesh(ed);
+  cols[colIndex] |= (int)(alphaY * 0xff) << 24;
+  EdUpdColPickerMesh();
 }
 
-void EdPickCol(Ed ed) {
-  Wnd wnd = ed->wnd;
+void EdPickCol() {
   /* TODO: proper inverse mat so wnd can be moved around n shit */
   /* TODO: use generic rect intersect funcs */
-  float x = (MouseX(wnd) - 10) / (float)ed->colPickerSize;
-  float y = (MouseY(wnd) - 10) / (float)ed->colPickerSize;
-  if (ed->flags & ED_FEXPAND_COLOR_PICKER) {
+  float x = (MouseX(wnd) - 10) / (float)colPickerSize;
+  float y = (MouseY(wnd) - 10) / (float)colPickerSize;
+  if (flags & ED_FEXPAND_COLOR_PICKER) {
     /* clicked on the grey adjust bar */
     if (y >= 0 && y <= CPICK_HEIGHT && x >= CPICK_BBAR_LEFT && x < CPICK_BBAR_RIGHT) {
-      ed->greyY = y;
+      greyY = y;
     }
     /* clicked on the alpha adjust bar */
     else if (y >= 0 && y <= CPICK_HEIGHT && x >= CPICK_ABAR_LEFT && x < CPICK_ABAR_RIGHT) {
-      ed->alphaY = y;
+      alphaY = y;
     }
     /* clicked on the col picker */
     else if (y >= 0 && y <= CPICK_HEIGHT && x >= 0 && x < CPICK_WIDTH) {
-      ed->colX = x;
-      ed->colY = y;
+      colX = x;
+      colY = y;
     }
-    EdMixPickEdCol(ed);
+    EdMixPickedCol();
   } else {
     float p[2];
     p[0] = MouseX(wnd);
     p[1] = MouseY(wnd);
-    EdMapToImg(ed, p);
-    if (x >= 0 && x < ed->width && y >= 0 && y < ed->height) {
-      ed->cols[ed->colIndex] =
-        ed->imgData[(int)p[1] * ed->width + (int)p[0]];
+    EdMapToImg(p);
+    if (x >= 0 && x < width && y >= 0 && y < height) {
+      cols[colIndex] =
+        imgData[(int)p[1] * width + (int)p[0]];
     }
   }
 }
@@ -270,26 +266,28 @@ void EdPickCol(Ed ed) {
 /* ---------------------------------------------------------------------------------------------- */
 
 /* NOTE: this updates rect in place to the adjusted power-of-two size */
-int* EdCreatePixsFromRegion(Ed ed, float* rect) {
+int* EdCreatePixsFromRegion(float* rect, int powerOfTwo) {
   float extents[4];
   int* newData = 0;
   int x, y;
 
   /* commit any pending changes to the current image */
-  if (ed->flags & ED_FDIRTY) {
-    EdFlushUpds(ed);
+  if (flags & ED_FDIRTY) {
+    EdFlushUpds();
   }
 
-  /* snap crop rect to the closest power of two sizes */
-  SetRectSize(rect, RoundUpToPowerOfTwo(RectWidth(rect)),
-    RoundUpToPowerOfTwo(RectHeight(rect)));
+  if (powerOfTwo) {
+    /* snap crop rect to the closest power of two sizes */
+    SetRectSize(rect, RoundUpToPowerOfTwo(RectWidth(rect)),
+      RoundUpToPowerOfTwo(RectHeight(rect)));
+  }
 
   /* create cropped pixel data, fill any padding that goes out of the original image with transp */
-  SetRect(extents, 0, ed->width, 0, ed->height);
+  SetRect(extents, 0, width, 0, height);
   for (y = RectTop(rect); y < RectBot(rect); ++y) {
     for (x = RectLeft(rect); x < RectRight(rect); ++x) {
       if (PtInRect(extents, x, y)) {
-        ArrCat(&newData, ed->imgData[y * ed->width + x]);
+        ArrCat(&newData, imgData[y * width + x]);
       } else {
         ArrCat(&newData, 0xff000000);
       }
@@ -299,33 +297,29 @@ int* EdCreatePixsFromRegion(Ed ed, float* rect) {
   return newData;
 }
 
-void EdFillRect(Ed ed, float* rect, int col) {
+void EdFillRect(float* rect, int col) {
   int x, y;
-  if (EdUpdPaintRateLimiter(ed)) {
+  if (EdUpdPaintRateLimiter()) {
     for (y = RectTop(rect); y < RectBot(rect); ++y) {
       for (x = RectLeft(rect); x < RectRight(rect); ++x) {
-        EdPaintPix(ed, x, y, col, 0);
+        EdPaintPix(x, y, col, 0);
       }
     }
   }
 }
 
-void EdCrop(Ed ed, float* rect) {
-  float potRect[4];
-  int* newData;
-
-  MemCpy(potRect, rect, sizeof(potRect));
-  newData = EdCreatePixsFromRegion(ed, potRect);
+void EdCrop(float* rect) {
+  int* newData = EdCreatePixsFromRegion(rect, 0);
 
   /* refresh everything */
-  RmArr(ed->imgData);
-  ed->imgData = newData;
-  ed->width = RectWidth(potRect);
-  ed->height = RectHeight(potRect);
-  EdClrSelection(ed);
-  EdUpdMesh(ed);
-  EdFlushUpds(ed);
-  EdClrPanning(ed);
+  RmArr(imgData);
+  imgData = newData;
+  width = RectWidth(rect);
+  height = RectHeight(rect);
+  EdClrSelection();
+  EdUpdMesh();
+  EdFlushUpds();
+  EdClrPanning();
 }
 
 /* TODO: clean up this mess, maybe use a generic ui function to draw rectangles with borders */
@@ -334,9 +328,9 @@ void EdCrop(Ed ed, float* rect) {
  * 1px border. by using img coord offsets and messing with the repeat mode, I can reuse the
  * img to draw all 4 sides of the dashed selection border */
 
-void EdDashBorderH(Ed ed, Mesh mesh, float* rect, float off, int col) {
-  float uSize = RectWidth(rect) * ed->scale;
-  float vSize = RectHeight(rect) * ed->scale;
+void EdDashBorderH(Mesh mesh, float* rect, float off, int col) {
+  float uSize = RectWidth(rect) * scale;
+  float vSize = RectHeight(rect) * scale;
   Col(mesh, col);
   ImgQuad(mesh,
     RectX(rect)    , RectY(rect)     , 1 + off, 1,
@@ -348,9 +342,9 @@ void EdDashBorderH(Ed ed, Mesh mesh, float* rect, float off, int col) {
   );
 }
 
-void EdDashBorderV(Ed ed, Mesh mesh, float* rect, float off, int col) {
-  float uSize = RectWidth(rect) * ed->scale;
-  float vSize = RectHeight(rect) * ed->scale;
+void EdDashBorderV(Mesh mesh, float* rect, float off, int col) {
+  float uSize = RectWidth(rect) * scale;
+  float vSize = RectHeight(rect) * scale;
   Col(mesh, col);
   ImgQuad(mesh,
     RectX(rect)    , RectY(rect)     , 1        , 1 - off,
@@ -362,121 +356,121 @@ void EdDashBorderV(Ed ed, Mesh mesh, float* rect, float off, int col) {
   );
 }
 
-void EdUpdYank(Ed ed) {
-  if (ed->cutMesh) {
-    Trans trans = ed->cutTrans;
-    float* rect = ed->effectiveSelRect;
-    EdSelectedRect(ed, rect);
+void EdUpdYank() {
+  if (cutMesh) {
+    Trans trans = cutTrans;
+    float* rect = effectiveSelRect;
+    EdSelectedRect(rect);
     ClrTrans(trans);
     /* TODO: instead of multiplying by scale everywhere, keep a separate mat for scale? */
-    SetPos(trans, RectX(rect) * ed->scale, RectY(rect) * ed->scale);
+    SetPos(trans, RectX(rect) * scale, RectY(rect) * scale);
   }
 }
 
-void EdClrYank(Ed ed) {
-  RmMesh(ed->cutMesh);
-  ed->cutMesh = 0;
-  RmArr(ed->cutData);
-  ed->cutData = 0;
+void EdClrYank() {
+  RmMesh(cutMesh);
+  cutMesh = 0;
+  RmArr(cutData);
+  cutData = 0;
 }
 
-void EdClrSelection(Ed ed) {
-  MemSet(ed->selRect, 0, sizeof(ed->selRect));
-  ed->flags &= ~ED_FSELECT;
-  EdClrYank(ed);
+void EdClrSelection() {
+  MemSet(selRect, 0, sizeof(selRect));
+  flags &= ~ED_FSELECT;
+  EdClrYank();
 }
 
-void EdYank(Ed ed) {
-  float* potRect = ed->cutPotRect;
-  float* rect = ed->effectiveSelRect;
-  if (ed->cutMesh) {
-    EdClrYank(ed);
+void EdYank() {
+  float* potRect = cutPotRect;
+  float* rect = effectiveSelRect;
+  if (cutMesh) {
+    EdClrYank();
   }
-  MemCpy(ed->cutSourceRect, rect, sizeof(float) * 4);
+  MemCpy(cutSourceRect, rect, sizeof(float) * 4);
   MemCpy(potRect, rect, sizeof(float) * 4);
-  ed->cutData = EdCreatePixsFromRegion(ed, potRect);
-  Pixs(ed->cutImg, RectWidth(potRect), RectHeight(potRect), ed->cutData);
-  ed->cutMesh = MkMesh();
-  Quad(ed->cutMesh, 0, 0, RectWidth(rect), RectHeight(rect));
-  EdFillRect(ed, rect, 0xff000000);
-  EdUpdYank(ed);
+  cutData = EdCreatePixsFromRegion(potRect, 1);
+  Pixs(cutImg, RectWidth(potRect), RectHeight(potRect), cutData);
+  cutMesh = MkMesh();
+  Quad(cutMesh, 0, 0, RectWidth(rect), RectHeight(rect));
+  EdFillRect(rect, 0xff000000);
+  EdUpdYank();
 }
 
-void EdPaste(Ed ed, float* rect, int flags) {
-  if (ed->cutMesh) {
+void EdPaste(float* rect, int flags) {
+  if (cutMesh) {
     int x, y;
-    float* potRect = ed->cutPotRect;
+    float* potRect = cutPotRect;
     int stride = RectWidth(potRect);
     for (y = 0; y < Min(RectHeight(potRect), RectHeight(rect)); ++y) {
       for (x = 0; x < Min(RectWidth(potRect), RectWidth(rect)); ++x) {
         int dx = RectLeft(rect) + x;
         int dy = RectTop(rect) + y;
-        int col = ed->cutData[y * stride + x];
-        EdPaintPix(ed, dx, dy, col, flags);
+        int col = cutData[y * stride + x];
+        EdPaintPix(dx, dy, col, flags);
       }
     }
   }
 }
 
-void EdUnyank(Ed ed) {
+void EdUnyank() {
   /* paste at start location. no alpha blending to ensure we restore that rect to exactly the state
    * it had when we yanked */
-  EdPaste(ed, ed->cutSourceRect, ED_FIGNORE_SELECTION);
-  EdClrYank(ed);
+  EdPaste(cutSourceRect, ED_FIGNORE_SELECTION);
+  EdClrYank();
 }
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void EdBeginSelect(Ed ed) {
-  switch (ed->selAnchor) {
+void EdBeginSelect() {
+  switch (selAnchor) {
     case ED_SELECT_NONE: {
       float p[2];
-      EdClrSelection(ed);
-      p[0] = MouseX(ed->wnd);
-      p[1] = MouseY(ed->wnd);
-      EdMapToImg(ed, p);
-      SetRectLeft(ed->selRect, p[0]);
-      SetRectTop(ed->selRect, p[1]);
-      SetRectSize(ed->selRect, 0, 0);
-      ed->flags |= ED_FSELECT;
+      EdClrSelection();
+      p[0] = MouseX(wnd);
+      p[1] = MouseY(wnd);
+      EdMapToImg(p);
+      SetRectLeft(selRect, p[0]);
+      SetRectTop(selRect, p[1]);
+      SetRectSize(selRect, 0, 0);
+      flags |= ED_FSELECT;
       break;
     }
   }
 }
 
-void EdSelectedRect(Ed ed, float* rect) {
+void EdSelectedRect(float* rect) {
   float imgRect[4];
   float xoff = 1.5f, yoff = 1.5f;
-  MemCpy(rect, ed->selRect, sizeof(float) * 4);
+  MemCpy(rect, selRect, sizeof(float) * 4);
   if (RectWidth(rect) < 0) xoff *= -1;
   if (RectHeight(rect) < 0) yoff *= -1;
   SetRectSize(rect, (int)(RectWidth(rect) + xoff), (int)(RectHeight(rect) + yoff));
   NormRect(rect);
-  SetRect(imgRect, 0, ed->width, 0, ed->height);
+  SetRect(imgRect, 0, width, 0, height);
   ClampRect(rect, imgRect);
   FloorFlts(4, rect, rect);
 }
 
-void EdPutSelect(Ed ed) {
-  Img img = ed->selBorderImg;
-  float* rect = ed->effectiveSelRect;
+void EdPutSelect() {
+  Img img = selBorderImg;
+  float* rect = effectiveSelRect;
   Mesh meshH = MkMesh();
   Mesh meshV = MkMesh();
-  float off = ed->selBlinkTimer * 2;
+  float off = selBlinkTimer * 2;
 
   /* draw dashed border that alternates between white and black */
-  EdDashBorderH(ed, meshH, rect, off + 0, 0xffffff);
-  EdDashBorderH(ed, meshH, rect, off + 2, 0x000000);
-  EdDashBorderV(ed, meshV, rect, off + 0, 0xffffff);
-  EdDashBorderV(ed, meshV, rect, off + 2, 0x000000);
+  EdDashBorderH(meshH, rect, off + 0, 0xffffff);
+  EdDashBorderH(meshH, rect, off + 2, 0x000000);
+  EdDashBorderV(meshV, rect, off + 0, 0xffffff);
+  EdDashBorderV(meshV, rect, off + 2, 0x000000);
 
   SetImgWrapU(img, REPEAT);
   SetImgWrapV(img, CLAMP_TO_EDGE);
-  PutMesh(meshH, ToTmpMat(ed->trans), img);
+  PutMeshRaw(meshH, ToTmpMat(trans), img);
 
   SetImgWrapU(img, CLAMP_TO_EDGE);
   SetImgWrapV(img, REPEAT);
-  PutMesh(meshV, ToTmpMat(ed->trans), img);
+  PutMeshRaw(meshV, ToTmpMat(trans), img);
 
   RmMesh(meshH);
   RmMesh(meshV);
@@ -484,52 +478,52 @@ void EdPutSelect(Ed ed) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void EdBeginPainting(Ed ed) {
-  switch (ed->tool) {
-    case ED_SELECT: { EdBeginSelect(ed); break; }
+void EdBeginPainting() {
+  switch (tool) {
+    case ED_SELECT: { EdBeginSelect(); break; }
   }
 }
 
-void EdPainting(Ed ed) {
-  switch (ed->tool) {
+void EdPainting() {
+  switch (tool) {
     case ED_PENCIL: {
-      int col = ed->cols[ed->colIndex];
+      int col = cols[colIndex];
       float point[2];
-      point[0] = (int)ed->cX;
-      point[1] = (int)ed->cY;
-      EdMapToImg(ed, point);
-      if (EdUpdPaintRateLimiter(ed)) {
+      point[0] = (int)cX;
+      point[1] = (int)cY;
+      EdMapToImg(point);
+      if (EdUpdPaintRateLimiter()) {
         /* alpha blend unless we're deleting the pixel with complete transparency */
-        EdPaintPix(ed, (int)point[0], (int)point[1], col,
+        EdPaintPix((int)point[0], (int)point[1], col,
           ((col & 0xff000000) == 0xff000000) ? 0 : ED_FALPHA_BLEND);
       }
       break;
     }
     case ED_COLOR_PICKER: {
-      EdPickCol(ed);
+      EdPickCol();
       break;
     }
     /* TODO: not sure if select dragging belongs here */
     case ED_SELECT: {
-      switch (ed->selAnchor) {
+      switch (selAnchor) {
         case ED_SELECT_NONE: {
           float p[2];
-          p[0] = MouseX(ed->wnd);
-          p[1] = MouseY(ed->wnd);
-          EdMapToImg(ed, p);
-          SetRectRight(ed->selRect, p[0]);
-          SetRectBot(ed->selRect, p[1]);
+          p[0] = MouseX(wnd);
+          p[1] = MouseY(wnd);
+          EdMapToImg(p);
+          SetRectRight(selRect, p[0]);
+          SetRectBot(selRect, p[1]);
           break;
         }
         case ED_SELECT_MID: {
-          float* rect = ed->selRect;
+          float* rect = selRect;
           SetRectPos(rect,
-            RectX(rect) + MouseDX(ed->wnd) / (float)ed->scale,
-            RectY(rect) + MouseDY(ed->wnd) / (float)ed->scale);
-          if (ed->cutMesh) {
-            EdUpdYank(ed);
+            RectX(rect) + MouseDX(wnd) / (float)scale,
+            RectY(rect) + MouseDY(wnd) / (float)scale);
+          if (cutMesh) {
+            EdUpdYank();
           } else {
-            EdSelectedRect(ed, ed->effectiveSelRect);
+            EdSelectedRect(effectiveSelRect);
           }
           break;
         }
@@ -538,306 +532,279 @@ void EdPainting(Ed ed) {
   }
 }
 
-void EdUpdTrans(Ed ed) {
-  Trans trans = ed->trans;
+void EdUpdTrans() {
   ClrTrans(trans);
-  SetPos(trans, (int)ed->oX, (int)ed->oY);
-  SetScale1(trans, ed->scale);
-  EdUpdYank(ed);
+  SetPos(trans, (int)oX, (int)oY);
+  SetScale1(trans, scale);
+  EdUpdYank();
 }
 
-void EdClrPanning(Ed ed) {
-  ed->oX = 100;
-  ed->oY = 100;
-  EdUpdTrans(ed);
+void EdClrPanning() {
+  oX = 100;
+  oY = 100;
+  EdUpdTrans();
 }
 
-void EdUpdMesh(Ed ed) {
-  RmMesh(ed->mesh);
-  ed->mesh = MkMesh();
-  Quad(ed->mesh, 0, 0, ed->width, ed->height);
+void EdUpdMesh() {
+  RmMesh(mesh);
+  mesh = MkMesh();
+  Quad(mesh, 0, 0, width, height);
 }
 
-void EdMapToImg(Ed ed, float* point) {
+void EdMapToImg(float* point) {
   /* un-mat mouse coordinates so they are relative to the img */
-  InvTransPt(ToTmpMatOrtho(ed->trans), point);
-  point[0] /= ed->scale;
-  point[1] /= ed->scale;
+  InvTransPt(ToTmpMatOrtho(trans), point);
+  point[0] /= scale;
+  point[1] /= scale;
 }
 
-void EdOnWheel(Ed ed, int direction) {
-  if ((ed->flags & ED_FHOLDING_SHIFT) && (ed->flags & ED_FANIM)) {
-    ed->animSpeed = Max(1, Min(120, ed->animSpeed + direction));
+void EdOnWheel(int direction) {
+  if ((flags & ED_FHOLDING_SHIFT) && (flags & ED_FANIM)) {
+    animSpeed = Max(1, Min(120, animSpeed + direction));
   } else {
     float p[2];
-    float newScale = ed->scale + direction * (ed->scale / 8 + 1);
+    float newScale = scale + direction * (scale / 8 + 1);
     newScale = Min(32, newScale);
     newScale = Max(1, newScale);
-    p[0] = ed->cX;
-    p[1] = ed->cY;
-    EdMapToImg(ed, p);
+    p[0] = cX;
+    p[1] = cY;
+    EdMapToImg(p);
     /* adjust panning so the pixel we're pointing stays under the cursor */
-    ed->oX -= (int)((p[0] * newScale) - (p[0] * ed->scale));
-    ed->oY -= (int)((p[1] * newScale) - (p[1] * ed->scale));
-    ed->scale = newScale;
-    EdUpdTrans(ed);
+    oX -= (int)((p[0] * newScale) - (p[0] * scale));
+    oY -= (int)((p[1] * newScale) - (p[1] * scale));
+    scale = newScale;
+    EdUpdTrans();
   }
 }
 
-void EdSave(Ed ed) {
+void EdSave() {
   char* spr;
-  EdFlushUpds(ed);
-  spr = ArgbToSprArr(ed->imgData, ed->width, ed->height);
-  WrFile(ed->filePath, spr, ArrLen(spr));
+  EdFlushUpds();
+  spr = ArgbToSprArr(imgData, width, height);
+  WrFile(filePath, spr, ArrLen(spr));
   RmArr(spr);
 }
 
-void EdSaveOneBpp(Ed ed) {
+void EdSaveOneBpp() {
   char* data;
   char* b64Data;
   char* path = 0;
-  if (ed->flags & ED_FSELECT) {
+  if (flags & ED_FSELECT) {
     int x, y;
-    float* rect = ed->effectiveSelRect;
+    float* rect = effectiveSelRect;
     int* crop = 0;
     for (y = RectTop(rect); y < RectBot(rect); ++y) {
       for (x = RectLeft(rect); x < RectRight(rect); ++x) {
-        ArrCat(&crop, ed->imgData[y * ed->width + x]);
+        ArrCat(&crop, imgData[y * width + x]);
       }
     }
     data = ArgbArrToOneBpp(crop);
     RmArr(crop);
   } else {
-    data = ArgbArrToOneBpp(ed->imgData);
+    data = ArgbArrToOneBpp(imgData);
   }
   b64Data = ArrToB64(data);
   RmArr(data);
-  ArrStrCat(&path, ed->filePath);
+  ArrStrCat(&path, filePath);
   ArrStrCat(&path, ".txt");
   WrFile(path, b64Data, StrLen(b64Data));
   RmArr(path);
   Free(b64Data);
 }
 
-void EdLoad(Ed ed) {
-  Spr spr = MkSprFromFile(ed->filePath);
+void EdLoad() {
+  Spr spr = MkSprFromFile(filePath);
   if (spr) {
-    EdFlushUpds(ed);
-    RmArr(ed->imgData);
-    ed->imgData = SprToArgbArr(spr);
-    ed->width = SprWidth(spr);
-    ed->height = SprHeight(spr);
-    EdUpdMesh(ed);
+    EdFlushUpds();
+    RmArr(imgData);
+    imgData = SprToArgbArr(spr);
+    width = SprWidth(spr);
+    height = SprHeight(spr);
+    EdUpdMesh();
     RmSpr(spr);
-    EdFlushUpds(ed);
+    EdFlushUpds();
   }
 }
 
-void EdOnMotion(Ed ed, float dx, float dy) {
-  int flags = ed->flags;
-  ed->cX += dx;
-  ed->cY += dy;
+void EdOnMotion(float dx, float dy) {
+  cX += dx;
+  cY += dy;
   if (flags & ED_FDRAGGING) {
-    ed->oX += dx;
-    ed->oY += dy;
-    EdUpdTrans(ed);
+    oX += dx;
+    oY += dy;
+    EdUpdTrans();
   }
-  if (flags & ED_FPAINTING) { EdPainting(ed); }
+  if (flags & ED_FPAINTING) { EdPainting(); }
 }
 
-void EdHandleKeyDown(Ed ed, int key, int state) {
+void EdHandleKeyDown(int key, int state) {
   switch (key) {
     case A:
-    case MMID: { ed->flags |= ED_FDRAGGING; break; }
+    case MMID: { flags |= ED_FDRAGGING; break; }
     case C: {
-      if (ed->tool == ED_COLOR_PICKER) {
-        ed->flags ^= ED_FEXPAND_COLOR_PICKER;
+      if (tool == ED_COLOR_PICKER) {
+        flags ^= ED_FEXPAND_COLOR_PICKER;
       } else {
-        ed->tool = ED_COLOR_PICKER;
+        tool = ED_COLOR_PICKER;
       }
       break;
     }
-    case E: { ed->tool = ED_PENCIL; break; }
+    case E: { tool = ED_PENCIL; break; }
     case S: {
       if (state & FCTRL) {
-        EdSave(ed);
+        EdSave();
       } else if (state & FSHIFT) {
-        EdPaste(ed, ed->effectiveSelRect, ED_FALPHA_BLEND);
-        EdClrSelection(ed);
+        EdPaste(effectiveSelRect, ED_FALPHA_BLEND);
+        EdClrSelection();
       } else {
-        ed->tool = ED_SELECT;
+        tool = ED_SELECT;
       }
       break;
     }
     case R: {
-      if (ed->flags & ED_FSELECT) {
-        EdCrop(ed, ed->effectiveSelRect);
+      if (flags & ED_FSELECT) {
+        EdCrop(effectiveSelRect);
       }
       break;
     }
     case N: {
       if (state & FSHIFT) {
-        ed->flags &= ~ED_FANIM;
-      } else if (ed->flags & ED_FSELECT) {
-        MemCpy(ed->animRect, ed->effectiveSelRect, sizeof(ed->animRect));
-        MemCpy(ed->animStartRect, ed->effectiveSelRect, sizeof(ed->animStartRect));
-        ed->flags |= ED_FANIM;
+        flags &= ~ED_FANIM;
+      } else if (flags & ED_FSELECT) {
+        MemCpy(animRect, effectiveSelRect, sizeof(animRect));
+        MemCpy(animStartRect, effectiveSelRect, sizeof(animStartRect));
+        flags |= ED_FANIM;
       }
       break;
     }
     case K1: {
       if (state & FCTRL) {
-        EdSaveOneBpp(ed);
+        EdSaveOneBpp();
       } else {
-        EdFillRect(ed, ed->effectiveSelRect, ed->cols[0]);
+        EdFillRect(effectiveSelRect, cols[0]);
       }
       break;
     }
-    case K2: { EdFillRect(ed, ed->effectiveSelRect, ed->cols[1]); break; }
+    case K2: { EdFillRect(effectiveSelRect, cols[1]); break; }
     case D: {
       if (state & FSHIFT) {
-        EdUnyank(ed);
+        EdUnyank();
       } else {
-        EdYank(ed);
+        EdYank();
       }
       break;
     }
     case T: {
-      if (EdUpdPaintRateLimiter(ed)) {
-        EdPaste(ed, ed->effectiveSelRect, ED_FALPHA_BLEND);
+      if (EdUpdPaintRateLimiter()) {
+        EdPaste(effectiveSelRect, ED_FALPHA_BLEND);
       }
       break;
     }
     case RIGHT_BRACKET:
-    case MWHEELUP: { EdOnWheel(ed, 1); break; }
+    case MWHEELUP: { EdOnWheel(1); break; }
     case LEFT_BRACKET:
-    case MWHEELDOWN: { EdOnWheel(ed, -1); break; }
+    case MWHEELDOWN: { EdOnWheel(-1); break; }
     case Q:
     case W:
     case MLEFT:
     case MRIGHT: {
-      EdClrPaintRateLimiter(ed);
-      ed->flags |= ED_FPAINTING;
-      ed->colIndex = key == MRIGHT || key == W ? 1 : 0;
-      ed->selAnchor = key == MRIGHT || key == W ? ED_SELECT_MID : ED_SELECT_NONE;
-      EdBeginPainting(ed);
-      EdPainting(ed);
-      EdFlushUpds(ed);
+      EdClrPaintRateLimiter();
+      flags |= ED_FPAINTING;
+      colIndex = key == MRIGHT || key == W ? 1 : 0;
+      selAnchor = key == MRIGHT || key == W ? ED_SELECT_MID : ED_SELECT_NONE;
+      EdBeginPainting();
+      EdPainting();
+      EdFlushUpds();
       break;
     }
     case F1: {
-      ed->flags ^= ED_FHELP;
+      flags ^= ED_FHELP;
       break;
     }
-    case H: { ed->wishX = -1; break; }
-    case L: { ed->wishX = 1; break; }
-    case K: { ed->wishY = -1; break; }
-    case J: { ed->wishY = 1; break; }
+    case H: { wishX = -1; break; }
+    case L: { wishX = 1; break; }
+    case K: { wishY = -1; break; }
+    case J: { wishY = 1; break; }
     case LEFT_SHIFT:
-    case RIGHT_SHIFT: { ed->flags |= ED_FHOLDING_SHIFT; break; }
+    case RIGHT_SHIFT: { flags |= ED_FHOLDING_SHIFT; break; }
   }
 }
 
-void EdHandleKeyUp(Ed ed, int key) {
+void EdHandleKeyUp(int key) {
   switch (key) {
     case A:
-    case MMID: { ed->flags &= ~ED_FDRAGGING; break; }
+    case MMID: { flags &= ~ED_FDRAGGING; break; }
     case Q:
     case W:
     case MLEFT:
-    case MRIGHT: { ed->flags &= ~ED_FPAINTING; break; }
+    case MRIGHT: { flags &= ~ED_FPAINTING; break; }
     case LEFT_SHIFT:
-    case RIGHT_SHIFT: { ed->flags &= ~ED_FHOLDING_SHIFT; break; }
+    case RIGHT_SHIFT: { flags &= ~ED_FHOLDING_SHIFT; break; }
     case H:
-    case L: { ed->wishX = 0; break; }
+    case L: { wishX = 0; break; }
     case K:
-    case J: { ed->wishY = 0; break; }
+    case J: { wishY = 0; break; }
   }
 }
 
-int EdHandleMsg(Ed ed) {
-  Wnd wnd = ed->wnd;
-  switch (MsgType(wnd)) {
-    case SIZE: {
-      EdSizeColPicker(ed);
-      break;
-    }
-    case KEYDOWN: {
-      EdHandleKeyDown(ed, Key(wnd), KeyState(ed->wnd));
-      break;
-    }
-    case KEYUP: { EdHandleKeyUp(ed, Key(wnd)); break; }
-    case MOTION: {
-      ed->cX = MouseX(wnd) - MouseDX(wnd);
-      ed->cY = MouseY(wnd) - MouseDY(wnd);
-      ed->flags &= ~ED_FSHOW_CURSOR;
-      EdOnMotion(ed, MouseDX(wnd), MouseDY(wnd));
-      break;
-    }
-    case QUIT: { return 0; }
-  }
-  return 1;
-}
-
-void EdUpd(Ed ed) {
-  Wnd wnd = ed->wnd;
-  if (ed->flags & ED_FDIRTY) {
-    ed->flushTimer += Delta(wnd);
+void EdUpd() {
+  if (flags & ED_FDIRTY) {
+    flushTimer += Delta(wnd);
     /* flush updates periodically or if there's too many queued */
-    if (ed->flushTimer > ED_FLUSH_TIME || ArrLen(ed->updates) > ED_FLUSH_THRESHOLD) {
-      EdFlushUpds(ed);
-      ed->flushTimer = Max(0, ed->flushTimer - ED_FLUSH_TIME);
+    if (flushTimer > ED_FLUSH_TIME || ArrLen(updates) > ED_FLUSH_THRESHOLD) {
+      EdFlushUpds();
+      flushTimer = Max(0, flushTimer - ED_FLUSH_TIME);
     }
   } else {
-    ed->flushTimer = 0;
+    flushTimer = 0;
   }
 
-  if (ed->wishX || ed->wishY) {
-    float dx = ed->wishX * (ed->flags & ED_FHOLDING_SHIFT ? 300 : 100) * Delta(ed->wnd);
-    float dy = ed->wishY * (ed->flags & ED_FHOLDING_SHIFT ? 300 : 100) * Delta(ed->wnd);
-    ed->flags |= ED_FSHOW_CURSOR;
-    EdOnMotion(ed, dx, dy);
+  if (wishX || wishY) {
+    float dx = wishX * (flags & ED_FHOLDING_SHIFT ? 300 : 100) * Delta();
+    float dy = wishY * (flags & ED_FHOLDING_SHIFT ? 300 : 100) * Delta();
+    flags |= ED_FSHOW_CURSOR;
+    EdOnMotion(dx, dy);
   }
 
-  ed->selBlinkTimer += Delta(ed->wnd);
-  ed->selBlinkTimer = FltMod(ed->selBlinkTimer, 2);
+  selBlinkTimer += Delta();
+  selBlinkTimer = FltMod(selBlinkTimer, 2);
 
-  EdSelectedRect(ed, ed->effectiveSelRect);
+  EdSelectedRect(effectiveSelRect);
 
-  if (ed->flags & ED_FANIM) {
-    ed->animTimer += Delta(ed->wnd);
-    while (ed->animTimer >= 1.0f / ed->animSpeed) {
+  if (flags & ED_FANIM) {
+    animTimer += Delta();
+    while (animTimer >= 1.0f / animSpeed) {
       float extents[4];
-      float* r = ed->animRect;
+      float* r = animRect;
       int x, y, empty = 1;
-      ed->animTimer -= 1.0f / ed->animSpeed;
+      animTimer -= 1.0f / animSpeed;
       SetRectPos(r, RectX(r) + RectWidth(r), RectY(r));
-      SetRect(extents, 0, ed->width, 0, ed->height);
+      SetRect(extents, 0, width, 0, height);
       if (RectInRect(r, extents)) {
         for (y = (int)RectTop(r); y < (int)RectBot(r); ++y) {
           for (x = (int)RectLeft(r); x < (int)RectRight(r); ++x) {
-            if ((ed->imgData[y * ed->width + x] & 0xff000000) != 0xff000000) {
+            if ((imgData[y * width + x] & 0xff000000) != 0xff000000) {
               empty = 0;
             }
           }
         }
       }
       if (empty) {
-        MemCpy(r, ed->animStartRect, sizeof(ed->animRect));
+        MemCpy(r, animStartRect, sizeof(animRect));
       }
     }
   }
 }
 
-void EdPaintPix(Ed ed, int x, int y, int col, int flags) {
+void EdPaintPix(int x, int y, int col, int flags) {
   float rect[4];
   int fcol = col;
-  SetRect(rect, 0, ed->width, 0, ed->height);
-  if ((ed->flags & ED_FSELECT) && !(flags & ED_FIGNORE_SELECTION)) {
-    ClampRect(rect, ed->effectiveSelRect);
+  SetRect(rect, 0, width, 0, height);
+  if ((flags & ED_FSELECT) && !(flags & ED_FIGNORE_SELECTION)) {
+    ClampRect(rect, effectiveSelRect);
   }
   if (PtInRect(rect, x, y)) {
-    int* px = &ed->imgData[y * ed->width + x];
+    int* px = &imgData[y * width + x];
     if (flags & ED_FALPHA_BLEND) {
       /* normal alpha blending with whatever is currently here */
       fcol = AlphaBlend(col, *px);
@@ -845,46 +812,45 @@ void EdPaintPix(Ed ed, int x, int y, int col, int flags) {
     if (*px != fcol) {
       EDUpd* u;
       *px = fcol;
-      u = ArrAlloc(&ed->updates, 1);
+      u = ArrAlloc(&updates, 1);
       u->x = x;
       u->y = y;
       u->col = col;
       u->flags = flags;
-      ed->flags |= ED_FDIRTY;
+      flags |= ED_FDIRTY;
     }
   }
 }
 
-void EdFlushUpds(Ed ed) {
-  Pixs(ed->img, ed->width, ed->height, ed->imgData);
-  SetArrLen(ed->updates, 0);
-  ed->flags &= ~ED_FDIRTY;
+void EdFlushUpds() {
+  Pixs(img, width, height, imgData);
+  SetArrLen(updates, 0);
+  flags &= ~ED_FDIRTY;
 }
 
-void EdClrPaintRateLimiter(Ed ed) {
-  ed->lastPutX = -1;
+void EdClrPaintRateLimiter() {
+  lastPutX = -1;
 }
 
-int EdUpdPaintRateLimiter(Ed ed) {
+int EdUpdPaintRateLimiter() {
   float p[2];
   int x, y;
-  p[0] = ed->cX;
-  p[1] = ed->cY;
-  EdMapToImg(ed, p);
+  p[0] = cX;
+  p[1] = cY;
+  EdMapToImg(p);
   x = (int)p[0];
   y = (int)p[1];
-  if (x != ed->lastPutX || y != ed->lastPutY) {
-    ed->lastPutX = x;
-    ed->lastPutY = y;
+  if (x != lastPutX || y != lastPutY) {
+    lastPutX = x;
+    lastPutY = y;
     return 1;
   }
   return 0;
 }
 
-void EdPutUpds(Ed ed) {
+void EdPutUpds() {
   int i;
   Mesh mesh = MkMesh();
-  EDUpd* updates = ed->updates;
   for (i = 0; i < ArrLen(updates); ++i) {
     EDUpd* u = &updates[i];
     if (u->flags & ED_FALPHA_BLEND) {
@@ -901,19 +867,18 @@ void EdPutUpds(Ed ed) {
     }
     Quad(mesh, u->x, u->y, 1, 1);
   }
-  PutMesh(mesh, ToTmpMat(ed->trans), 0);
+  PutMesh(mesh, ToTmpMat(trans), 0);
   RmMesh(mesh);
 }
 
 /* cover rest of the area in grey to distinguish it from a transparent image */
-void EdPutBorders(Ed ed) {
+void EdPutBorders() {
   /* TODO: only regenerate mesh when the mat changes */
-  int winWidth = WndWidth(ed->wnd);
-  int winHeight = WndHeight(ed->wnd);
+  int winWidth = WndWidth(wnd);
+  int winHeight = WndHeight(wnd);
   int right, bottom;
-  int oX = (int)ed->oX, oY = (int)ed->oY;
-  int scalEdWidth = ed->width * ed->scale;
-  int scalEdHeight = ed->height * ed->scale;
+  int scalEdWidth = width * scale;
+  int scalEdHeight = height * scale;
   Mesh mesh = MkMesh();
   Col(mesh, 0x111111);
   if (oX > 0) {
@@ -934,49 +899,49 @@ void EdPutBorders(Ed ed) {
   RmMesh(mesh);
 }
 
-void EdPutCursor(Ed ed) {
+void EdPutCursor() {
   /* TODO: do not use a tmp mesh for the cursor */
-  int x = (int)ed->cX;
-  int y = (int)ed->cY;
+  int x = (int)cX;
+  int y = (int)cY;
   Mesh mesh = MkMesh();
   Col(mesh, 0xffffff);
   Tri(mesh, x, y, x, y + 20, x + 10, y + 17);
-  Col(mesh, ed->cols[ed->colIndex]);
+  Col(mesh, cols[colIndex]);
   Tri(mesh, x+1, y+3, x+1, y + 18, x + 8, y + 16);
   PutMesh(mesh, 0, 0);
   RmMesh(mesh);
 }
 
-void EdPut(Ed ed) {
-  PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->checkerImg);
-  PutMesh(ed->mesh, ToTmpMat(ed->trans), ed->img);
-  EdPutBorders(ed);
-  EdPutUpds(ed);
-  if (ed->cutMesh) {
-    Mat copy = ToMat(ed->cutTrans);
-    PutMesh(ed->cutMesh, MulMat(copy, ToTmpMat(ed->trans)), ed->cutImg);
+void EdPut() {
+  PutMeshRaw(mesh, ToTmpMat(trans), checkerImg);
+  PutMeshRaw(mesh, ToTmpMat(trans), img);
+  EdPutBorders();
+  EdPutUpds();
+  if (cutMesh) {
+    Mat copy = ToMat(cutTrans);
+    PutMeshRaw(cutMesh, MulMat(copy, ToTmpMat(trans)), cutImg);
     RmMat(copy);
   }
-  if (ed->flags & ED_FSHOW_CURSOR) {
-    EdPutCursor(ed);
+  if (flags & ED_FSHOW_CURSOR) {
+    EdPutCursor();
   }
-  if (ed->flags & ED_FSELECT) {
-    EdPutSelect(ed);
+  if (flags & ED_FSELECT) {
+    EdPutSelect();
   }
-  if (ed->tool == ED_COLOR_PICKER) {
-    EdPutColPicker(ed);
+  if (tool == ED_COLOR_PICKER) {
+    EdPutColPicker();
   }
-  if (ed->flags & ED_FHELP) {
-    PutMesh(ed->helpBgMesh, 0, 0);
-    PutMesh(ed->helpTextMesh, 0, FtImg(ed->font));
+  if (flags & ED_FHELP) {
+    PutMesh(helpBgMesh, 0, 0);
+    PutMeshRaw(helpTextMesh, 0, FtImg(font));
   }
-  if (ed->flags & ED_FANIM) {
+  if (flags & ED_FANIM) {
     Mesh mesh;
     char* str = 0;
-    float* r = ed->animRect;
-    int x = (int)(WndWidth(ed->wnd) - RectWidth(r) * ed->scale);
-    int w = RectWidth(r) * ed->scale;
-    int h = RectHeight(r) * ed->scale;
+    float* r = animRect;
+    int x = (int)(WndWidth(wnd) - RectWidth(r) * scale);
+    int w = RectWidth(r) * scale;
+    int h = RectHeight(r) * scale;
 
     mesh = MkMesh();
     Col(mesh, 0x7f000000);
@@ -986,24 +951,16 @@ void EdPut(Ed ed) {
 
     mesh = MkMesh();
     ImgQuad(mesh, x, 5, RectLeft(r), RectTop(r), w, h, RectWidth(r), RectHeight(r));
-    PutMesh(mesh, 0, ed->img);
+    PutMeshRaw(mesh, 0, img);
     RmMesh(mesh);
 
     ArrStrCat(&str, "anim spd: ");
-    ArrStrCatI32(&str, ed->animSpeed, 10);
+    ArrStrCatI32(&str, animSpeed, 10);
     ArrStrCat(&str, " fps");
     ArrCat(&str, 0);
-    PutFt(ed->font, 0xbebebe, x, (int)(RectHeight(r) * ed->scale) + 15, str);
+    PutFt(font, 0xbebebe, x, (int)(RectHeight(r) * scale) + 15, str);
     RmArr(str);
   }
-  SwpBufs(ed->wnd);
-}
-
-Wnd EdCreateWnd() {
-  Wnd wnd = MkWnd();
-  SetWndClass(wnd, "WeebCoreSpriteEd");
-  SetWndName(wnd, "WeebCore Sprite Ed");
-  return wnd;
 }
 
 int EdSampleCheckerboard(float x, float y) {
@@ -1052,91 +1009,101 @@ Mat EdCreateBgTrans() {
   return Scale1(mat, ED_CHECKER_SIZE);
 }
 
-Ed EdCreate(char* filePath) {
-  Ed ed = Alloc(sizeof(struct _Ed));
-  ed->scale = 4;
-  ed->wnd = EdCreateWnd();
-  ed->cX = WndWidth(ed->wnd) / 2;
-  ed->cY = WndHeight(ed->wnd) / 2;
-  ed->checkerImg = EdCreateCheckerImg();
-  ed->img = MkImg();
-  ed->cutImg = MkImg();
-  ed->width = ED_IMGSIZE;
-  ed->height = ED_IMGSIZE;
-  ed->imgData = EdCreatePixs(0xff000000, ed->width, ed->height);
-  ed->trans = MkTrans();
-  ed->colPickerTrans = MkTrans();
-  ed->cutTrans = MkTrans();
-  ed->tool = ED_PENCIL;
-  ed->grey = 0xffffff;
-  ed->cols[1] = 0xff000000;
-  ed->filePath = filePath ? filePath : "out.wbspr";
-  ed->selBorderImg = EdCreateSelBorderImg();
-  ed->animSpeed = 5;
+void Init() {
+  wnd = AppWnd();
+  filePath = Argc() > 1 ? Argv(1) : "out.wbspr";
+  scale = 4;
+  cX = WndWidth(wnd) / 2;
+  cY = WndHeight(wnd) / 2;
+  checkerImg = EdCreateCheckerImg();
+  img = MkImg();
+  cutImg = MkImg();
+  width = ED_IMGSIZE;
+  height = ED_IMGSIZE;
+  imgData = EdCreatePixs(0xff000000, width, height);
+  trans = MkTrans();
+  colPickerTrans = MkTrans();
+  cutTrans = MkTrans();
+  tool = ED_PENCIL;
+  grey = 0xffffff;
+  cols[1] = 0xff000000;
+  selBorderImg = EdCreateSelBorderImg();
+  animSpeed = 5;
 
-  ed->flags |= ED_FHELP;
-  ed->font = DefFt();
+  flags |= ED_FHELP;
+  font = DefFt();
   /* TODO: scale with screen size */
   /* TODO: actual proper automatic ui layoutting */
-  ed->helpTextMesh = MkMesh();
-  Col(ed->helpTextMesh, 0xbebebe);
-  FtMesh(ed->helpTextMesh, ed->font, 15, 15, EdHelpString());
-  ed->helpBgMesh = MkMesh();
-  Col(ed->helpBgMesh, 0x33000000);
-  Quad(ed->helpBgMesh, 5, 5, 610, 405);
+  helpTextMesh = MkMesh();
+  Col(helpTextMesh, 0xbebebe);
+  FtMesh(helpTextMesh, font, 15, 15, EdHelpString());
+  helpBgMesh = MkMesh();
+  Col(helpBgMesh, 0x33000000);
+  Quad(helpBgMesh, 5, 5, 610, 405);
 
-  EdClrSelection(ed);
-  EdUpdColPickerMesh(ed);
-  EdUpdMesh(ed);
-  EdFlushUpds(ed);
-  EdSizeColPicker(ed);
-  EdClrPanning(ed);
-  EdLoad(ed);
-
-  return ed;
+  EdClrSelection();
+  EdUpdColPickerMesh();
+  EdUpdMesh();
+  EdFlushUpds();
+  EdSizeColPicker();
+  EdClrPanning();
+  EdLoad();
 }
 
-void RmEd(Ed ed) {
-  if (ed) {
-    EdClrYank(ed);
-    EdClrSelection(ed);
-    RmWnd(ed->wnd);
-    RmMesh(ed->cutMesh);
-    RmMesh(ed->mesh);
-    RmMesh(ed->colPickerMesh);
-    RmMesh(ed->helpTextMesh);
-    RmMesh(ed->helpBgMesh);
-    RmArr(ed->imgData);
-    RmArr(ed->updates);
-    RmImg(ed->img);
-    RmImg(ed->cutImg);
-    RmImg(ed->checkerImg);
-    RmImg(ed->selBorderImg);
-    RmTrans(ed->trans);
-    RmTrans(ed->colPickerTrans);
-    RmTrans(ed->cutTrans);
-    RmFt(ed->font);
-  }
-  Free(ed);
+void Quit() {
+  EdClrYank();
+  EdClrSelection();
+  RmMesh(cutMesh);
+  RmMesh(mesh);
+  RmMesh(colPickerMesh);
+  RmMesh(helpTextMesh);
+  RmMesh(helpBgMesh);
+  RmArr(imgData);
+  RmArr(updates);
+  RmImg(img);
+  RmImg(cutImg);
+  RmImg(checkerImg);
+  RmImg(selBorderImg);
+  RmTrans(trans);
+  RmTrans(colPickerTrans);
+  RmTrans(cutTrans);
+  RmFt(font);
 }
 
-/* ---------------------------------------------------------------------------------------------- */
+void Size() {
+  EdSizeColPicker();
+}
 
+void KeyDown() {
+  EdHandleKeyDown(Key(wnd), KeyState(wnd));
+}
 
+void KeyUp() {
+  EdHandleKeyUp(Key(wnd));
+}
 
-int main(int argc, char* argv[]) {
-  Ed ed = EdCreate(argc > 1 ? argv[1] : 0);
-  while (1) {
-    while (NextMsg(ed->wnd)) {
-      if (!EdHandleMsg(ed)) {
-        RmEd(ed);
-        return 0;
-      }
-    }
-    EdUpd(ed);
-    EdPut(ed);
-  }
-  return 0;
+void Motion() {
+  cX = MouseX(wnd) - MouseDX(wnd);
+  cY = MouseY(wnd) - MouseDY(wnd);
+  flags &= ~ED_FSHOW_CURSOR;
+  EdOnMotion(MouseDX(wnd), MouseDY(wnd));
+}
+
+void Frame() {
+  EdUpd();
+  EdPut();
+}
+
+void AppInit() {
+  SetAppClass("WeebCoreSpriteEd");
+  SetAppName("WeebCore Sprite Ed");
+  On(INIT, Init);
+  On(QUIT, Quit);
+  On(SIZE, Size);
+  On(KEYDOWN, KeyDown);
+  On(KEYUP, KeyUp);
+  On(MOTION, Motion);
+  On(FRAME, Frame);
 }
 
 #define WEEBCORE_IMPLEMENTATION

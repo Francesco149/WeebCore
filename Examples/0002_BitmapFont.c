@@ -1,18 +1,15 @@
 #include "WeebCore.c"
 
-Trans MkBigTextTrans() {
-  Trans trans = MkTrans();
-  SetPos(trans, 0, 120);
-  return SetScale1(trans, 2);
-}
+Mesh mesh;
+Trans trans;
+Ft ft;
 
-int main(int argc, char* argv[]) {
-  Mesh mesh;
-  Wnd wnd = MkWnd();
-  Ft ft = DefFt();
-  Trans trans = MkBigTextTrans();
-  SetWndClass(wnd, "HelloWnd");
-  SetWndName(wnd, "Hello Font");
+void Init() {
+  ft = DefFt();
+
+  trans = MkTrans();
+  SetPos(trans, 0, 120);
+  SetScale1(trans, 2);
 
   mesh = MkMesh();
   Col(mesh, 0xbebebe);
@@ -23,26 +20,25 @@ int main(int argc, char* argv[]) {
     "  int main(int argc, char* argv[]) {\n"
     "    puts(\"Hello World!\");\n"
     "  }");
+}
 
-  while (1) {
-    while (NextMsg(wnd)) {
-      switch (MsgType(wnd)) {
-        case QUIT: {
-          RmMesh(mesh);
-          RmFt(ft);
-          RmTrans(trans);
-          RmWnd(wnd);
-          return 0;
-        }
-      }
-    }
+void Quit() {
+  RmMesh(mesh);
+  RmFt(ft);
+  RmTrans(trans);
+}
 
-    PutMesh(mesh, 0, FtImg(ft));
-    PutMesh(mesh, ToTmpMat(trans), FtImg(ft));
-    SwpBufs(wnd);
-  }
+void Frame() {
+  PutMeshRaw(mesh, 0, FtImg(ft));
+  PutMeshRaw(mesh, ToTmpMat(trans), FtImg(ft));
+}
 
-  return 0;
+void AppInit() {
+  SetAppClass("HelloWnd");
+  SetAppName("Hello Font");
+  On(INIT, Init);
+  On(QUIT, Quit);
+  On(FRAME, Frame);
 }
 
 #define WEEBCORE_IMPLEMENTATION

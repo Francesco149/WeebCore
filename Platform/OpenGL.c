@@ -90,7 +90,7 @@ void Face(Mesh mesh, int i1, int i2, int i3) {
   indices[2] = mesh->istart + i3;
 }
 
-void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs) {
+void PutMeshRawEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs) {
   int stride = sizeof(VertData);
   GLuint gltex, curImg;
 

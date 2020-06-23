@@ -2,7 +2,6 @@
   defined(__OpenBSD__)
 /* TODO: actually test other *nixes */
 #include "X11.c"
-#include "Platform/LibCMath.c"
 #else
 #error "unknown platform"
 #endif

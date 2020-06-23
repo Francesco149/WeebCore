@@ -3,15 +3,20 @@
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <X11/Xutil.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <time.h>
 #include <immintrin.h>
-#include <errno.h>
 
+/* render layer */
 static void GrInit();
+
+/* os layer */
+typedef struct _OsTime* OsTime;
+
+static void Die(char* fmt, ...);
+static OsTime MkOsTime();
+static void RmOsTime(OsTime t);
+static void OsTimeCpy(OsTime dst, OsTime src);
+static void OsTimeNow(OsTime dst);
+static float OsTimeDelta(OsTime before, OsTime now);
 
 struct _Wnd {
   Display* dpy;
@@ -21,7 +26,7 @@ struct _Wnd {
   int width, height;
   int mouseX, mouseY;
   float minFrameTime;
-  struct timespec lastTime, now;
+  OsTime lastTime, now;
   float delta;
   int msgType;
   union _MsgData {
@@ -35,57 +40,9 @@ struct _Wnd {
   } u;
 };
 
-static void Die(char* fmt, ...) {
-  va_list va;
-  va_start(va, fmt);
-  vprintf(fmt, va);
-  va_end(va);
-  putchar('\n');
-  exit(1);
-}
-
-void* Alloc(int n) {
-  void* p = malloc(n);
-  MemSet(p, 0, n);
-  return p;
-}
-
-void* Realloc(void* p, int n) {
-  return realloc(p, n);
-}
-
-void Free(void* p) {
-  free(p);
-}
-
-void MemSet(void* p, unsigned char val, int n) {
-  memset(p, val, n);
-}
-
-void MemCpy(void* dst, void* src, int n) {
-  memcpy(dst, src, n);
-}
-
-int WrFile(char* path, void* data, int dataLen) {
-  FILE* f = fopen(path, "wb");
-  int res;
-  if (!f) {
-    return -1;
-  }
-  res = (int)fwrite(data, 1, dataLen, f);
-  fclose(f);
-  return res;
-}
-
-int RdFile(char* path, void* data, int maxSize) {
-  FILE* f = fopen(path, "rb");
-  int res;
-  if (!f) {
-    return -1;
-  }
-  res = (int)fread(data, 1, maxSize, f);
-  fclose(f);
-  return res;
+static void UpdateTime(Wnd wnd) {
+  OsTimeNow(wnd->now);
+  wnd->delta = OsTimeDelta(wnd->lastTime, wnd->now);
 }
 
 /* pick fb config that has the the highest samples visual */
@@ -135,26 +92,7 @@ static void SetWMProtocol(Wnd wnd, char* name) {
   XSetWMProtocols(wnd->dpy, wnd->ptr, &wmProtocol, 1);
 }
 
-static void TSpecDelta(struct timespec* delta, struct timespec* a, struct timespec* b) {
-  if (a->tv_nsec > b->tv_nsec) {
-    delta->tv_sec = b->tv_sec - a->tv_sec - 1;
-    delta->tv_nsec = 1000000000 + b->tv_nsec - a->tv_nsec;
-  } else {
-    delta->tv_sec = b->tv_sec - a->tv_sec;
-    delta->tv_nsec = b->tv_nsec - a->tv_nsec;
-  }
-}
-
-static void UpdateTime(Wnd wnd) {
-  struct timespec delta;
-  if (clock_gettime(CLOCK_MONOTONIC, &wnd->now) == -1) {
-    Die("clock_gettime failed: %s\n", strerror(errno));
-  }
-  TSpecDelta(&delta, &wnd->lastTime, &wnd->now);
-  wnd->delta = delta.tv_sec + delta.tv_nsec * 1e-9f;
-}
-
-Wnd MkWnd() {
+Wnd MkWnd(char* name, char* class) {
   Wnd wnd = Alloc(sizeof(struct _Wnd));
   Window rootwin;
   XSetWindowAttributes swa;
@@ -190,8 +128,8 @@ Wnd MkWnd() {
   /* capture delete event so closing the wnd actually stops msgloop */
   SetWMProtocol(wnd, "WM_DELETE_WINDOW");
 
-  SetWndName(wnd, "WeebCoreX11");
-  SetWndClass(wnd, "WeebCore");
+  SetWndName(wnd, name ? name : "WeebCoreX11");
+  SetWndClass(wnd, class ? class : "WeebCore");
 
   wnd->gl = glXCreateNewContext(wnd->dpy, fb, GLX_RGBA_TYPE, 0, True);
   glXMakeCurrent(wnd->dpy, wnd->ptr, wnd->gl);
@@ -200,8 +138,10 @@ Wnd MkWnd() {
   XFree(vi);
 
   SetWndFPS(wnd, 10000);
+  wnd->lastTime = MkOsTime();
+  wnd->now = MkOsTime();
   UpdateTime(wnd);
-  MemCpy(&wnd->lastTime, &wnd->now, sizeof(wnd->lastTime));
+  OsTimeCpy(wnd->lastTime, wnd->now);
   wnd->delta = wnd->minFrameTime;
 
   GrInit();
@@ -215,6 +155,8 @@ void RmWnd(Wnd wnd) {
   XDestroyWindow(wnd->dpy, wnd->ptr);
   XFreeColormap(wnd->dpy, wnd->colorMap);
   XCloseDisplay(wnd->dpy);
+  RmOsTime(wnd->now);
+  RmOsTime(wnd->lastTime);
   Free(wnd);
 }
 
@@ -238,7 +180,7 @@ void SetWndFPS(Wnd wnd, int fps) {
   wnd->minFrameTime = 1.0f / (fps ? fps : 10000);
 }
 
-float Delta(Wnd wnd) {
+float WndDelta(Wnd wnd) {
   return wnd->delta;
 }
 
@@ -514,7 +456,7 @@ static void OsSwpBufs(Wnd wnd) {
   glXSwapBuffers(wnd->dpy, wnd->ptr);
 
   UpdateTime(wnd);
-  while (Delta(wnd) < wnd->minFrameTime) {
+  while (WndDelta(wnd) < wnd->minFrameTime) {
     UpdateTime(wnd);
     _mm_pause();
   }
@@ -523,7 +465,15 @@ static void OsSwpBufs(Wnd wnd) {
     Die("delta was zero, something is very wrong with the timer.");
   }
 
-  MemCpy(&wnd->lastTime, &wnd->now, sizeof(wnd->lastTime));
+  OsTimeCpy(wnd->lastTime, wnd->now);
 }
 
 #include "Platform/OpenGL.c"
+#include "Platform/LibC.c"
+
+#ifndef WEEBCORE_LIB
+int main(int argc, char* argv[]) {
+  AppInit();
+  return AppMain(argc, argv);
+}
+#endif

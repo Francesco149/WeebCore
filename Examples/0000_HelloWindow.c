@@ -1,22 +1,8 @@
 #include "WeebCore.c"
-#include <math.h>
 
-int main() {
-  Wnd wnd = MkWnd();
-  SetWndClass(wnd, "HelloWnd");
-  SetWndName(wnd, "Hello WeebCore");
-  while (1) {
-    while (NextMsg(wnd)) {
-      switch (MsgType(wnd)) {
-        case QUIT: {
-          RmWnd(wnd);
-          return 0;
-        }
-      }
-    }
-    SwpBufs(wnd);
-  }
-  return 0;
+void AppInit() {
+  SetAppName("Hello WeebCore");
+  SetAppClass("HelloWnd");
 }
 
 #define WEEBCORE_IMPLEMENTATION

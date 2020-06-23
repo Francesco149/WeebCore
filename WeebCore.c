@@ -2,12 +2,74 @@
 #define WEEBCORE_HEADER
 
 /* opaque handles */
+typedef int ImgPtr;
 typedef struct _Mesh* Mesh;
 typedef struct _Img* Img;
 typedef struct _Trans* Trans;
 typedef struct _Packer* Packer;
 typedef struct _Wnd* Wnd;
-typedef struct _Clk* Clk;
+typedef struct _Mat* Mat;
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                          APP INTERFACE                                         */
+/*                                                                                                */
+/* the app interface is designed to minimize boilerplate when working with weebcore in C.         */
+/* all you are required to do is define a void AppInit() function where you can bind msg handlers */
+/* as you like.                                                                                   */
+/*                                                                                                */
+/* NOTE: when AppInit is called, nothing is initialized yet. you should do all your init from     */
+/*       On(INIT, MyInitFunc) and only set app parameters in AppInit                              */
+/* ---------------------------------------------------------------------------------------------- */
+
+#ifndef WEEBCORE_LIB
+void AppInit();
+#endif
+
+/* these funcs can be called in AppInit to set app parameters */
+
+void SetAppName(char* name);
+void SetAppClass(char* class);
+
+/* pageSize is the size of a texture page for the texture allocator. there is a tradeoff between
+ * runtime performance and load times overhead. a big pageSize will result in less texture switches
+ * during rendering but it will slow down flushing img allocations significantly as it will have
+ * to update a bigger img on the gpu */
+void SetAppPageSize(int pageSize);
+
+/* ---------------------------------------------------------------------------------------------- */
+
+typedef void(* AppHandler)();
+
+/* register handler to be called whenever msg happens. multiple handlers can be bound to same msg.
+ * handlers are called in the order they are added.
+ * scroll down to "ENUMS AND CONSTANTS" for a list of msgs, or check out the Examples */
+void On(int msg, AppHandler handler);
+void RmHandler(int msg, AppHandler handler);
+
+/* time elapsed since the last frame, in seconds */
+float Delta();
+
+ImgPtr ImgFromSprFile(char* path);
+void PutMesh(Mesh mesh, Mat mat, ImgPtr ptr);
+
+Wnd AppWnd();
+ImgPtr ImgAlloc(int width, int height);
+
+/* copy raw pixels dx, dy in the img. anything outside the img size is cropped out.
+ * note that this replaces pixels. it doesn't do any kind of alpha blending */
+void ImgCpyEx(ImgPtr ptr, int* pixs, int width, int height, int dx, int dy);
+
+/* calls ImgCpyEx with dx, dy = 0, 0 */
+void ImgCpy(ImgPtr ptr, int* pixs, int width, int height);
+
+/* when you allocate img's they are not immediately sent to the gpu. they will temporarily be blank
+ * until this is called. the engine calls this automatically every once in a while, but you can
+ * explicitly call it to force refresh img's.
+ * this is also automatically called after the INIT msg when using the App interface */
+void FlushImgs();
+
+int Argc();
+char* Argv(int i);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                    BUILT-IN MATH FUNCTIONS                                     */
@@ -51,8 +113,6 @@ int RectInRectArea(float* needle, float* haystack);
 /* ---------------------------------------------------------------------------------------------- */
 
 /* OpenGL-like post-multiplied mat. mat memory layout is row major */
-
-typedef struct _Mat* Mat;
 
 Mat MkMat();
 void RmMat(Mat mat);
@@ -122,8 +182,8 @@ char* ArgbToSprArr(int* argb, int width, int height);
 /* ---------------------------------------------------------------------------------------------- */
 
 
-/* calls PutMeshEx with zero u/v offset */
-void PutMesh(Mesh mesh, Mat mat, Img img);
+/* calls PutMeshRawEx with zero u/v offset */
+void PutMeshRaw(Mesh mesh, Mat mat, Img img);
 
 /* create a mat from scale, position, origin, rot applied in a fixed order */
 
@@ -358,6 +418,8 @@ enum {
   KEYUP,
   MOTION,
   SIZE,
+  INIT,
+  FRAME,
   LAST_EVENT_TYPE
 };
 
@@ -527,13 +589,43 @@ enum {
 };
 
 /* ---------------------------------------------------------------------------------------------- */
+/*                            MISC DEBUG AND SEMI-INTERNAL INTERFACES                             */
+/* ---------------------------------------------------------------------------------------------- */
+
+/* (automatically called by the platform layer)
+ * initializes app and runs the main loop.
+ * this also takes care of calling pseudo msgs like INIT, FRAME and calling SwpBufs */
+int AppMain(int argc, char* argv[]);
+
+/* (automatically called by AppMain) initialize the app globals. */
+void MkApp(int argc, char* argv[]);
+
+/* (automatically called by AppMain)
+ * clean up the app globals (optional, as virtual memory cleans everything up when we exit) */
+void RmApp();
+
+/* the Diag* api's are mainly used internally for debugging and diagnostics */
+int DiagPageCount();
+Img DiagPage(int page);
+int* DiagPagePixs(int page);
+Packer DiagPagePacker(int page);
+int DiagPageFlags(int page);
+float* DiagRegion(ImgPtr ptr);
+
+void DiagSetPage(int page, Img img);
+void DiagSetPagePixs(int page, int* pixs);
+void DiagSetPagePacker(int page, Packer pak);
+void DiagSetPageFlags(int page, int flags);
+void DiagSetRegion(ImgPtr ptr, float left, float right, float top, float bot);
+
+/* ---------------------------------------------------------------------------------------------- */
 /*                                        PLATFORM LAYER                                          */
 /*                                                                                                */
 /* you can either include Platform/Platform.h to use the built in sample platform layers or write */
 /* your own by defining these structs and funcs                                                   */
 /* ---------------------------------------------------------------------------------------------- */
 
-Wnd MkWnd();
+Wnd MkWnd(char* name, char* class);
 void RmWnd(Wnd wnd);
 void SetWndName(Wnd wnd, char* wndName);
 void SetWndClass(Wnd wnd, char* className);
@@ -543,7 +635,7 @@ int WndHeight(Wnd wnd);
 
 /* get time elapsed in seconds since the last SwpBufs. guaranteed to return non-zero even if
  * no SwpBufs happened */
-float Delta(Wnd wnd);
+float WndDelta(Wnd wnd);
 
 /* FPS limiter, 0 for unlimited. limiting happens in SwpBufs. note that unlimited fps still
  * waits for the minimum timer resolution for GetTime */
@@ -573,6 +665,9 @@ void* Realloc(void* p, int n);
 void Free(void* p);
 void MemSet(void* p, unsigned char val, int n);
 void MemCpy(void* dst, void* src, int n);
+
+/* same as MemCpy but allows overlapping regions of memory */
+void MemMv(void* dst, void* src, int n);
 
 /* write data to disk. returns number of bytes written or < 0 for errors */
 int WrFile(char* path, void* data, int dataLen);
@@ -624,7 +719,7 @@ void ImgCoord(Mesh mesh, float u, float v);
 void Face(Mesh mesh, int i1, int i2, int i3);
 
 /* this is internally used to do img atlases and map relative uv's to the bigger image */
-void PutMeshEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
+void PutMeshRawEx(Mesh mesh, Mat mat, Img img, float uOffs, float vOffs);
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -679,6 +774,12 @@ void ClsCol(int color);
 /* ############################################################################################## */
 
 #if defined(WEEBCORE_IMPLEMENTATION) && !defined(WEEBCORE_OVERRIDE_MONOLITHIC_BUILD)
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* to minimize duplication, I decided to have common flags shared by all internal stuff */
+#define DIRTY (1<<0)
+#define ORTHO_DIRTY (1<<1)
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -988,8 +1089,8 @@ void ArrStrCatI32(char** res, int x, int base) {
 
 /* ---------------------------------------------------------------------------------------------- */
 
-void PutMesh(Mesh mesh, Mat mat, Img img) {
-  PutMeshEx(mesh, mat, img, 0, 0);
+void PutMeshRaw(Mesh mesh, Mat mat, Img img) {
+  PutMeshRawEx(mesh, mat, img, 0, 0);
 }
 
 struct _Trans {
@@ -1000,9 +1101,6 @@ struct _Trans {
   Mat tempMat, tempMatOrtho;
   int dirty;
 };
-
-#define MAT_DIRTY (1<<0)
-#define MAT_ORTHO_DIRTY (1<<1)
 
 Trans MkTrans() {
   Trans trans = Alloc(sizeof(struct _Trans));
@@ -1071,19 +1169,19 @@ Mat ToMat(Trans trans) { return CalcTrans(trans, MkMat(), 0); }
 Mat ToMatOrtho(Trans trans) { return CalcTrans(trans, MkMat(), 1); }
 
 Mat ToTmpMat(Trans trans) {
-  if (trans->dirty & MAT_DIRTY) {
+  if (trans->dirty & DIRTY) {
     SetIdentity(trans->tempMat);
     CalcTrans(trans, trans->tempMat, 0);
-    trans->dirty &= ~MAT_DIRTY;
+    trans->dirty &= ~DIRTY;
   }
   return trans->tempMat;
 }
 
 Mat ToTmpMatOrtho(Trans trans) {
-  if (trans->dirty & MAT_ORTHO_DIRTY) {
+  if (trans->dirty & ORTHO_DIRTY) {
     SetIdentity(trans->tempMatOrtho);
     CalcTrans(trans, trans->tempMatOrtho, 1);
-    trans->dirty &= ~MAT_ORTHO_DIRTY;
+    trans->dirty &= ~ORTHO_DIRTY;
   }
   return trans->tempMatOrtho;
 }
@@ -1478,7 +1576,7 @@ void PutFt(Ft ft, int col, int x, int y, char* string) {
   Mesh mesh = MkMesh();
   Col(mesh, col);
   FtMesh(mesh, ft, x, y, string);
-  PutMesh(mesh, 0, FtImg(ft));
+  PutMeshRaw(mesh, 0, FtImg(ft));
   RmMesh(mesh);
 }
 
@@ -1882,6 +1980,238 @@ void RmSpr(Spr spr) {
     RmArr(spr->data);
   }
   Free(spr);
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+
+typedef struct _ImgPage {
+  Img img;
+  int* pixs;
+  Packer pak;
+  int flags;
+} ImgPage;
+
+typedef struct _ImgRegion {
+  int page;
+  float r[4];
+} ImgRegion;
+
+static struct _Globals {
+  int argc;
+  char** argv;
+  Wnd wnd;
+  AppHandler* handlers[LAST_EVENT_TYPE];
+
+  /* params */
+  char* name;
+  char* class;
+  int pageSize;
+
+  /* img allocator */
+  ImgPage* pages;
+  ImgRegion* regions;
+} app;
+
+Wnd AppWnd() { return app.wnd; }
+float Delta() { return WndDelta(app.wnd); }
+int Argc() { return app.argc; }
+char* Argv(int i) { return app.argv[i]; }
+
+void On(int msg, AppHandler handler) {
+  if (msg >= 0 && msg < LAST_EVENT_TYPE) {
+    ArrCat(&app.handlers[msg], handler);
+  }
+}
+
+void RmHandler(int msg, AppHandler handler) {
+  if (msg >= 0 && msg < LAST_EVENT_TYPE) {
+    int i;
+    AppHandler* handlers = app.handlers[msg];
+    for (i = 0; i < ArrLen(handlers); ++i) {
+      if (handlers[i] == handler) {
+        MemMv(&handlers[i], &handlers[i + 1], (ArrLen(handlers) - i - 1) * sizeof(handlers[0]));
+        SetArrLen(handlers, ArrLen(handlers) - 1);
+        return;
+      }
+    }
+  }
+}
+
+void SetAppName(char* name) { app.name = name; }
+void SetAppClass(char* class) { app.class = class; }
+void SetAppPageSize(int pageSize) { app.pageSize = pageSize; }
+
+int DiagPageCount() { return ArrLen(app.pages); }
+Img DiagPage(int page) { return app.pages[page].img; }
+int* DiagPagePixs(int page) { return app.pages[page].pixs; }
+Packer DiagPagePacker(int page) { return app.pages[page].pak; }
+int DiagPageFlags(int page) { return app.pages[page].flags; }
+
+void DiagSetPage(int page, Img img) { app.pages[page].img = img; }
+void DiagSetPagePixs(int page, int* pixs) { app.pages[page].pixs = pixs; }
+void DiagSetPagePacker(int page, Packer pak) { app.pages[page].pak = pak; }
+void DiagSetPageFlags(int page, int flags) { app.pages[page].flags = flags; }
+
+void SetImgAllocRegion(ImgPtr ptr, float left, float right, float top, float bot) {
+  SetRect(app.regions[ptr - 1].r, left, right, top, bot);
+}
+
+float* ImgAllocRegion(ImgPtr ptr) { return app.regions[ptr - 1].r; }
+
+void MkApp(int argc, char* argv[]) {
+  app.argc = argc;
+  app.argv = argv;
+  app.pageSize = app.pageSize ? RoundUpToPowerOfTwo(app.pageSize) : 1024;
+  if (!app.name) { app.name = "WeebCore"; }
+  if (!app.class) { app.class = "WeebCore"; }
+  app.wnd = MkWnd(app.name, app.class);
+}
+
+void RmApp() {
+  int i;
+  for (i = 0; i < ArrLen(app.pages); ++i) {
+    ImgPage* page = &app.pages[i];
+    RmImg(page->img);
+    RmPacker(page->pak);
+    Free(page->pixs);
+  }
+  RmArr(app.pages);
+  RmArr(app.regions);
+  for (i = 0; i < LAST_EVENT_TYPE; ++i) {
+    RmArr(app.handlers[i]);
+  }
+}
+
+static void AppHandle(int msg) {
+  AppHandler* handlers = app.handlers[msg];
+  int i;
+  for (i = 0; i < ArrLen(handlers); ++i) {
+    handlers[i]();
+  }
+}
+
+int AppMain(int argc, char* argv[]) {
+  float flushTimer = 0;
+  MkApp(argc, argv);
+  AppHandle(INIT);
+  FlushImgs();
+  while (1) {
+    while (NextMsg(app.wnd)) {
+      int msg = MsgType(app.wnd);
+      AppHandle(msg);
+      if (msg == QUIT) {
+        RmApp();
+        return 0;
+      }
+      flushTimer += Delta();
+      if (flushTimer >= 1) {
+        FlushImgs();
+        flushTimer = 0;
+      }
+    }
+    AppHandle(FRAME);
+    SwpBufs(app.wnd);
+  }
+  return 0;
+}
+
+ImgPtr ImgAlloc(int width, int height) {
+  ImgRegion* region;
+  float r[4];
+  int i;
+  ImgPage* page = 0;
+  SetRect(r, 0, width, 0, height);
+  for (i = 0; i < ArrLen(app.pages); ++i) {
+    page = &app.pages[i];
+    if (Pack(page->pak, r)) {
+      break;
+    }
+  }
+  if (i >= ArrLen(app.pages)) {
+    /* no free pages, make a new page */
+    page = ArrAlloc(&app.pages, 1);
+    page->img = MkImg();
+    page->pixs = Alloc(app.pageSize * app.pageSize * sizeof(int));
+    page->pak = MkPacker(app.pageSize, app.pageSize);
+    if (!Pack(page->pak, r)) {
+      return 0;
+    }
+  }
+  region = ArrAlloc(&app.regions, 1);
+  if (region) {
+    CpyRect(region->r, r);
+    region->page = i;
+  }
+  return ArrLen(app.regions);
+}
+
+void ImgCpyEx(ImgPtr ptr, int* pixs, int width, int height, int dx, int dy) {
+  if (ptr >= 1 && ptr <= ArrLen(app.regions)) {
+    ImgRegion* region = &app.regions[ptr - 1];
+    ImgPage* page = &app.pages[region->page];
+    float* r = region->r;
+    int x, y;
+    int left = 0, top = 0;
+    int right = dx + width;
+    int bot = dy + height;
+    if (dx < 0) { left = -dx; }
+    if (dy < 0) { top = -dy; }
+    if (right > RectWidth(r)) {
+      width -= right - (int)RectWidth(r);
+    }
+    if (bot > RectHeight(r)) {
+      height -= bot - (int)RectWidth(r);
+    }
+    for (y = top; y < height; ++y) {
+      for (x = left; x < width; ++x) {
+        int dstx = RectX(r) + x + dx;
+        int dsty = RectY(r) + y + dy;
+        int* dstpix = &page->pixs[dsty * app.pageSize + dstx];
+        int srcpix = pixs[y * width + x];
+        if (*dstpix != srcpix) {
+          *dstpix = srcpix;
+          page->flags |= DIRTY;
+        }
+      }
+    }
+  }
+}
+
+void ImgCpy(ImgPtr ptr, int* pixs, int width, int height) {
+  ImgCpyEx(ptr, pixs, width, height, 0, 0);
+}
+
+void FlushImgs() {
+  int i;
+  for (i = 0; i < ArrLen(app.pages); ++i) {
+    ImgPage* page = &app.pages[i];
+    if (page->flags & DIRTY) {
+      Pixs(page->img, app.pageSize, app.pageSize, page->pixs);
+      page->flags &= ~DIRTY;
+    }
+  }
+}
+
+ImgPtr ImgFromSprFile(char* path) {
+  ImgPtr res = 0;
+  Spr spr = MkSprFromFile(path);
+  if (spr) {
+    int* pixs = SprToArgbArr(spr);
+    res = ImgAlloc(SprWidth(spr), SprHeight(spr));
+    ImgCpy(res, pixs, SprWidth(spr), SprHeight(spr));
+    RmArr(pixs);
+  }
+  RmSpr(spr);
+  return res;
+}
+
+void PutMesh(Mesh mesh, Mat mat, ImgPtr ptr) {
+  if (ptr) {
+    ImgRegion* region = &app.regions[ptr - 1];
+    PutMeshRawEx(mesh, mat, app.pages[region->page].img, RectX(region->r), RectY(region->r));
+  } else {
+    PutMeshRaw(mesh, mat, 0);
+  }
 }
 
 #endif /* WEEBCORE_IMPLEMENTATION */

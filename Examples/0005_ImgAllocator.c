@@ -1,114 +1,8 @@
-/* draft of the img man, which automatically packs together img's into one bigger img so the gpu
+/* draft of the img alloc, which automatically packs together img's into one bigger img so the gpu
  * doesn't have to swap img all the time.
  * it uses a fixed page size and when it runs out of space it makes a new page */
 
 #include "WeebCore.c"
-
-typedef struct _ImgMan* ImgMan;
-typedef int ImgHandle;
-
-typedef struct _ImgPage {
-  Img img;
-  int* pixs;
-  Packer pak;
-} ImgPage;
-
-typedef struct _ImgRegion {
-  int page;
-  float r[4];
-} ImgRegion;
-
-struct _ImgMan {
-  int width, height;
-  ImgPage* pages;
-  ImgRegion* regions;
-};
-
-ImgMan MkImgMan(int width, int height) {
-  ImgMan res = Alloc(sizeof(struct _ImgMan));
-  if (res) {
-    res->width = RoundUpToPowerOfTwo(width);
-    res->height = RoundUpToPowerOfTwo(height);
-  }
-  return res;
-}
-
-void RmImgMan(ImgMan man) {
-  if (man) {
-    int i;
-    for (i = 0; i < ArrLen(man->pages); ++i) {
-      RmImg(man->pages[i].img);
-      RmPacker(man->pages[i].pak);
-      Free(man->pages[i].pixs);
-    }
-    RmArr(man->pages);
-    RmArr(man->regions);
-  }
-  Free(man);
-}
-
-ImgHandle ManPixs(ImgMan man, int width, int height, int* pixs) {
-  ImgRegion* region;
-  float r[4];
-  int i;
-  ImgPage* page = 0;
-  SetRect(r, 0, width, 0, height);
-  for (i = 0; i < ArrLen(man->pages); ++i) {
-    page = &man->pages[i];
-    if (Pack(page->pak, r)) {
-      break;
-    }
-  }
-  if (i >= ArrLen(man->pages)) {
-    /* no free pages, make a new page */
-    page = ArrAlloc(&man->pages, 1);
-    page->img = MkImg();
-    page->pixs = Alloc(man->width * man->height * sizeof(int));
-    page->pak = MkPacker(man->width, man->height);
-    if (!Pack(page->pak, r)) {
-      return -1;
-    }
-  }
-  region = ArrAlloc(&man->regions, 1);
-  if (region) {
-    int x, y;
-    for (y = 0; y < height; ++y) {
-      for (x = 0; x < width; ++x) {
-        int dx = RectX(r) + x;
-        int dy = RectY(r) + y;
-        page->pixs[dy * man->width + dx] = pixs[y * width + x];
-      }
-    }
-    CpyRect(region->r, r);
-    region->page = i;
-    Pixs(page->img, man->width, man->height, page->pixs);
-  }
-  return ArrLen(man->regions) - 1;
-}
-
-ImgHandle ManSprFile(ImgMan man, char* path) {
-  ImgHandle res = -1;
-  Spr spr = MkSprFromFile(path);
-  if (spr) {
-    int* pixs = SprToArgbArr(spr);
-    res = ManPixs(man, SprWidth(spr), SprHeight(spr), pixs);
-    RmArr(pixs);
-  }
-  RmSpr(spr);
-  return res;
-}
-
-void ManPutMesh(ImgMan man, Mesh mesh, Mat mat, ImgHandle handle) {
-  ImgRegion* region = &man->regions[handle];
-  PutMeshEx(mesh, mat, man->pages[region->page].img, RectX(region->r), RectY(region->r));
-}
-
-Wnd MkImgManDemoWnd() {
-  Wnd wnd = MkWnd();
-  SetWndName(wnd, "WeebCore - Img Man Demo");
-  SetWndClass(wnd, "WeebCoreImgMan");
-  return wnd;
-}
 
 /* this demo just creates a bunch of random bouncing objects to fill up the atlas */
 
@@ -116,11 +10,21 @@ typedef struct {
   Trans trans;
   float r[4];
   float vx, vy;
-  ImgHandle img;
+  ImgPtr img;
   Mesh mesh;
 } Ent;
 
-void MkEnt(Ent** ents, ImgMan man, unsigned elapsed) {
+Wnd wnd;
+Ent* ents;
+unsigned elapsed;
+int showAtlas, page;
+int frames, fps;
+float fpsTimer;
+Mesh atlas;
+Ft ft;
+Mesh text;
+
+void MkEnt(Ent** ents, unsigned elapsed) {
   Ent* ent = ArrAlloc(ents, 1);
   int* pixs = 0;
   int i;
@@ -135,7 +39,9 @@ void MkEnt(Ent** ents, ImgMan man, unsigned elapsed) {
     float goff = (i / width) / (float)height;
     ArrCat(&pixs, col + ((int)(roff * 0x3f) << 16) + ((int)(goff * 0x3f) << 8));
   }
-  ent->img = ManPixs(man, width, height, pixs);
+  ent->img = ImgAlloc(width, height);
+  ImgCpy(ent->img, pixs, width, height);
+  FlushImgs();
   ent->mesh = MkMesh();
   Quad(ent->mesh, 0, 0, width, height);
   RmArr(pixs);
@@ -145,7 +51,7 @@ void MkEnt(Ent** ents, ImgMan man, unsigned elapsed) {
   ent->trans = MkTrans();
 }
 
-void UpdEnts(Ent* ents, Wnd wnd) {
+void UpdEnts(Ent* ents) {
   int i;
   float delta = Delta(wnd);
   for (i = 0; i < ArrLen(ents); ++i) {
@@ -170,10 +76,10 @@ void UpdEnts(Ent* ents, Wnd wnd) {
   }
 }
 
-void PutEnts(Ent* ents, ImgMan man) {
+void PutEnts(Ent* ents) {
   int i;
   for (i = 0; i < ArrLen(ents); ++i) {
-    ManPutMesh(man, ents[i].mesh, ToTmpMat(ents[i].trans), ents[i].img);
+    PutMesh(ents[i].mesh, ToTmpMat(ents[i].trans), ents[i].img);
   }
 }
 
@@ -186,7 +92,7 @@ void RmEnts(Ent* ents) {
   RmArr(ents);
 }
 
-void PutPageText(Ft ft, Wnd wnd, int page) {
+void PutPageText(Ft ft, int page) {
   char* pagestr = 0;
   ArrStrCat(&pagestr, "page: ");
   ArrStrCatI32(&pagestr, page, 10);
@@ -195,7 +101,7 @@ void PutPageText(Ft ft, Wnd wnd, int page) {
   RmArr(pagestr);
 }
 
-void PutStatsText(Ft ft, Wnd wnd, int fps, int ents, int pages) {
+void PutStatsText(Ft ft, int fps, int ents, int pages) {
   char* pagestr = 0;
   ArrStrCat(&pagestr, "fps: ");
   ArrStrCatI32(&pagestr, fps, 10);
@@ -208,90 +114,78 @@ void PutStatsText(Ft ft, Wnd wnd, int fps, int ents, int pages) {
   RmArr(pagestr);
 }
 
-int main() {
-  Wnd wnd = MkImgManDemoWnd();
-  ImgMan man = MkImgMan(1024, 1024);
-  Ent* ents = 0;
-
-  int frames = 0;
-  float fpsTimer = 0;
-  int fps = 0;
-
-  unsigned elapsed = 0;
-  int showAtlas = 0;
-  int page = 0;
-  Mesh atlas = MkMesh();
-  Ft ft = DefFt();
-  Mesh text = MkMesh();
-
+void Init() {
+  wnd = AppWnd();
+  atlas = MkMesh();
+  ft = DefFt();
+  text = MkMesh();
   Col(text, 0xbebebe);
   FtMesh(text, ft, 10, 10, "space to spawn random quads\n"
     "F1 to see the texture atlas\nmouse wheel to switch pages");
   Quad(atlas, 0, 0, 1024, 1024);
+}
 
-  while (1) {
-    while (NextMsg(wnd)) {
-      switch (MsgType(wnd)) {
-        case QUIT: {
-          RmEnts(ents);
-          RmImgMan(man);
-          RmMesh(text);
-          RmMesh(atlas);
-          RmFt(ft);
-          RmWnd(wnd);
-          return 0;
-        }
-        case KEYDOWN: {
-          switch (Key(wnd)) {
-            case SPACE: {
-              MkEnt(&ents, man, elapsed);
-              break;
-            }
-            case F1: {
-              showAtlas ^= 1;
-              break;
-            }
-            case MWHEELUP: {
-              page = Max(0, Min(page + 1, ArrLen(man->pages) - 1));
-              break;
-            }
-            case MWHEELDOWN: {
-              page = Max(page - 1, 0);
-              break;
-            }
-          }
-          break;
-        }
-      }
+void Quit() {
+  RmEnts(ents);
+  RmMesh(text);
+  RmMesh(atlas);
+  RmFt(ft);
+}
+
+void KeyDown() {
+  switch (Key(wnd)) {
+    case SPACE: {
+      MkEnt(&ents, elapsed);
+      break;
     }
-
-    UpdEnts(ents, wnd);
-
-    if (showAtlas) {
-      if (ArrLen(man->pages)) {
-        PutMesh(atlas, 0, man->pages[page].img);
-      }
-      PutPageText(ft, wnd, page);
-    } else {
-      PutEnts(ents, man);
+    case F1: {
+      showAtlas ^= 1;
+      break;
     }
-
-    PutMesh(text, 0, FtImg(ft));
-    PutStatsText(ft, wnd, fps, ArrLen(ents), ArrLen(man->pages));
-
-    elapsed += (int)(Delta(wnd) * 1000000000);
-
-    ++frames;
-    fpsTimer += Delta(wnd);
-    while (fpsTimer >= 1) {
-      fpsTimer -= 1;
-      fps = frames;
-      frames = 0;
+    case MWHEELUP: {
+      page = Max(0, Min(page + 1, DiagPageCount() - 1));
+      break;
     }
-
-    SwpBufs(wnd);
+    case MWHEELDOWN: {
+      page = Max(page - 1, 0);
+      break;
+    }
   }
-  return 0;
+}
+
+void Frame() {
+  UpdEnts(ents);
+
+  if (showAtlas) {
+    if (DiagPageCount()) {
+      PutMeshRaw(atlas, 0, DiagPage(page));
+    }
+    PutPageText(ft, page);
+  } else {
+    PutEnts(ents);
+  }
+
+  PutMeshRaw(text, 0, FtImg(ft));
+  PutStatsText(ft, fps, ArrLen(ents), DiagPageCount());
+
+  elapsed += (int)(Delta() * 1000000000);
+
+  ++frames;
+  fpsTimer += Delta();
+  while (fpsTimer >= 1) {
+    fpsTimer -= 1;
+    fps = frames;
+    frames = 0;
+  }
+}
+
+void AppInit() {
+  SetAppName("WeebCore - Img Allocator Demo");
+  SetAppClass("WeebCoreImgAllocator");
+  On(INIT, Init);
+  On(QUIT, Quit);
+  On(KEYDOWN, KeyDown);
+  On(FRAME, Frame);
 }
 
 #define WEEBCORE_IMPLEMENTATION
