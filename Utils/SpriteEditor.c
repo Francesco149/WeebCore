@@ -89,6 +89,7 @@ Wnd wnd;
 int flags;
 float oX, oY;
 float cX, cY;
+float dX, dY;
 int wishX, wishY;
 float flushTimer; /* TODO: built in timer events */
 int scale;
@@ -234,8 +235,8 @@ void EdMixPickedCol() {
 void EdPickCol() {
   /* TODO: proper inverse mat so wnd can be moved around n shit */
   /* TODO: use generic rect intersect funcs */
-  float x = (MouseX(wnd) - 10) / (float)colPickerSize;
-  float y = (MouseY(wnd) - 10) / (float)colPickerSize;
+  float x = (cX - 10) / (float)colPickerSize;
+  float y = (cY - 10) / (float)colPickerSize;
   if (flags & ED_FEXPAND_COLOR_PICKER) {
     /* clicked on the grey adjust bar */
     if (y >= 0 && y <= CPICK_HEIGHT && x >= CPICK_BBAR_LEFT && x < CPICK_BBAR_RIGHT) {
@@ -253,8 +254,8 @@ void EdPickCol() {
     EdMixPickedCol();
   } else {
     float p[2];
-    p[0] = MouseX(wnd);
-    p[1] = MouseY(wnd);
+    p[0] = cX;
+    p[1] = cY;
     EdMapToImg(p);
     if (x >= 0 && x < width && y >= 0 && y < height) {
       cols[colIndex] =
@@ -426,8 +427,8 @@ void EdBeginSelect() {
     case ED_SELECT_NONE: {
       float p[2];
       EdClrSelection();
-      p[0] = MouseX(wnd);
-      p[1] = MouseY(wnd);
+      p[0] = cX;
+      p[1] = cY;
       EdMapToImg(p);
       SetRectLeft(selRect, p[0]);
       SetRectTop(selRect, p[1]);
@@ -508,8 +509,8 @@ void EdPainting() {
       switch (selAnchor) {
         case ED_SELECT_NONE: {
           float p[2];
-          p[0] = MouseX(wnd);
-          p[1] = MouseY(wnd);
+          p[0] = cX;
+          p[1] = cY;
           EdMapToImg(p);
           SetRectRight(selRect, p[0]);
           SetRectBot(selRect, p[1]);
@@ -518,8 +519,8 @@ void EdPainting() {
         case ED_SELECT_MID: {
           float* rect = selRect;
           SetRectPos(rect,
-            RectX(rect) + MouseDX(wnd) / (float)scale,
-            RectY(rect) + MouseDY(wnd) / (float)scale);
+            RectX(rect) + dX / (float)scale,
+            RectY(rect) + dY / (float)scale);
           if (cutMesh) {
             EdUpdYank();
           } else {
@@ -627,6 +628,8 @@ void EdLoad() {
 }
 
 void EdOnMotion(float dx, float dy) {
+  dX = dx;
+  dY = dy;
   cX += dx;
   cY += dy;
   if (flags & ED_FDRAGGING) {
