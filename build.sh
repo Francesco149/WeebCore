@@ -18,6 +18,16 @@ compile() {
   ${cc:-gcc} $cflags "$@" $ldflags -lGL -lX11 -lm
 }
 
+case "$1" in
+  lib)
+    echo ":: building lib"
+    shift
+    compile "$@" -I"$abspath" -D_XOPEN_SOURCE=600 -shared -fPIC -o WeebCore.so \
+      Platform/PlatformLib.c || exit
+    exit 0
+    ;;
+esac
+
 # I explicitly build core separately just to make sure it's built with the absolute minimum cflags
 # so that any non-portable code is more likely to generate a warning
 echo ":: building core"

@@ -37,6 +37,92 @@ note that the platform include is absolutely optional and you can implement your
 WeebCore.c does not use any external library and doesn't include anything, not even the standard C
 library
 
+# calling WeebCore from other languages (FFI)
+
+WeebCore is designed to be FFI friendly. most of the interfaces take basic C types. the only gotcha
+is that if your lang/FFI lib can't generate callbacks you have to handle msgs manually (through
+a simple if/else or switch statement, or by building your own msg handling around it)
+
+here's a minimal example in python with callbacks
+
+```py
+#!/usr/bin/env python
+
+# run from WeebCore root dir with
+# ./build.sh lib && vblank_mode=0 LD_LIBRARY_PATH="$(pwd)" /path/to/script.py
+
+from ctypes import CDLL, c_void_p, c_int, c_float, CFUNCTYPE
+
+weeb = CDLL('WeebCore.so')  # on windows you would change this to dll
+weeb.MkMesh.restype = weeb.AppWnd.restype = weeb.MkMesh.restype = c_void_p
+weeb.Col.argtypes = [c_void_p, c_int]
+weeb.Quad.argtypes = [c_void_p] + [c_float] * 4
+weeb.PutMesh.argtypes = [c_void_p] * 3
+
+INIT = 6
+FRAME = 7
+
+
+class Game:
+  def __init__(self):
+    self.mesh = None
+
+
+G = Game()
+
+
+@CFUNCTYPE(None)
+def init():
+  G.mesh = weeb.MkMesh()
+  weeb.Col(G.mesh, 0xff3333)
+  weeb.Quad(G.mesh, 10, 10, 200, 100)
+
+
+@CFUNCTYPE(None)
+def frame():
+  weeb.PutMesh(G.mesh, None, None)
+
+
+weeb.On(INIT, init)
+weeb.On(FRAME, frame)
+weeb.AppMain(0, None)
+```
+
+here's a minimal example in python without callbacks
+
+```py
+#!/usr/bin/env python
+
+# run from WeebCore root dir with
+# ./build.sh lib && vblank_mode=0 LD_LIBRARY_PATH="$(pwd)" /path/to/script.py
+
+from ctypes import CDLL, c_void_p, c_int, c_float
+
+weeb = CDLL('WeebCore.so')  # on windows you would change this to dll
+weeb.MkMesh.restype = weeb.AppWnd.restype = weeb.MkMesh.restype = c_void_p
+weeb.Col.argtypes = [c_void_p, c_int]
+weeb.Quad.argtypes = [c_void_p] + [c_float] * 4
+weeb.PutMesh.argtypes = [c_void_p] * 3
+weeb.SwpBufs.argtypes = weeb.NextMsg.argtypes = [c_void_p]
+
+weeb.MkApp(0, None)
+wnd = weeb.AppWnd()
+mesh = weeb.MkMesh()
+weeb.Col(mesh, 0xff3333)
+weeb.Quad(mesh, 10, 10, 200, 100)
+
+while weeb.AppRunning():
+  while weeb.NextMsg(wnd) and weeb.AppHandleMsg():
+    # TODO: handle msgs here
+    pass
+
+  weeb.AppFrame()
+  weeb.PutMesh(mesh, None, None)
+  weeb.SwpBufs(wnd)
+
+weeb.RmApp()
+```
+
 # philosophy
 
 * modular design - no platform specific code in the core code, just provide a platform interface
