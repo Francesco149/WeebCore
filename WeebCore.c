@@ -2087,6 +2087,8 @@ static void NukeImgs() {
   }
   RmArr(app.pages);
   RmArr(app.regions);
+  app.pages = 0;
+  app.regions = 0;
 }
 
 void ClrImgs() {
