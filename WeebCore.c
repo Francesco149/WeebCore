@@ -2048,7 +2048,12 @@ static void AppHandle(int msg) {
   PruneHandlers();
 }
 
-static Ft MkDefFt() {
+typedef struct _FtData {
+  int width, height, charWidth, charHeight;
+  int* pixs;
+} FtData;
+
+static void DefFtData(FtData* ft) {
   /* generated from ft.wbspr using the SpriteEditor */
   static char* b64Data =
     "AIUQIQYIIIAAAAAEcIccE+c+ccAAAAAcAIUUcokIQEIIAAAEiYiiMgiCiiIIAAAiAIU0oSoAQEqIAAAImICCUggEiiAAEA"
@@ -2064,15 +2069,34 @@ static Ft MkDefFt() {
     "ciic8eg8MeIUie+IIEAAAAAAAAACAAIAAAAAgCAAAAAAACAEIIAAAAAAAAAcAAQAAAAAgCAAAAAAAcAAAAAAAAAAAAAAAA"
     "AAAAAAAAAAAAAAAAAAAAAA";
   char* data = ArrFromB64(b64Data);
-  int* pixs = OneBppArrToArgb(data);
-  int charWidth = 6;
-  int charHeight = 11;
-  int width = charWidth * 0x20;
-  int height = charHeight * 3;
-  Ft ft = MkFtFromSimpleGrid(pixs, width, height, charWidth, charHeight);
+  int i;
+  ft->pixs = OneBppArrToArgb(data);
+  for (i = 0; i < ArrLen(ft->pixs); ++i) {
+    ft->pixs[i] |= 0xffffff; /* make all pixs white */
+  }
+  ft->charWidth = 6;
+  ft->charHeight = 11;
+  ft->width = ft->charWidth * 0x20;
+  ft->height = ft->charHeight * 3;
   RmArr(data);
-  RmArr(pixs);
+}
+
+static Ft MkDefFt() {
+  FtData ftd;
+  Ft ft;
+  DefFtData(&ftd);
+  ft = MkFtFromSimpleGrid(ftd.pixs, ftd.width, ftd.height, ftd.charWidth, ftd.charHeight);
+  RmArr(ftd.pixs);
   return ft;
+}
+
+/* for when the ImgPtr is invalidated and we don't wanna invalidate ptrs to this Ft */
+static void RefreshFt(Ft ft) {
+  FtData ftd;
+  DefFtData(&ftd);
+  ft->img = ImgAlloc(ftd.width, ftd.height);
+  ImgCpy(ft->img, ftd.pixs, ftd.width, ftd.height);
+  RmArr(ftd.pixs);
 }
 
 Ft DefFt() { return app.ft; }
@@ -2091,9 +2115,17 @@ static void NukeImgs() {
   app.regions = 0;
 }
 
+void InitAppImgs() {
+  if (!app.ft) {
+    app.ft = MkDefFt();
+  } else {
+    RefreshFt(app.ft);
+  }
+}
+
 void ClrImgs() {
   NukeImgs();
-  app.ft = MkDefFt();
+  InitAppImgs();
 }
 
 void MkApp(int argc, char* argv[]) {
@@ -2104,7 +2136,7 @@ void MkApp(int argc, char* argv[]) {
   if (!app.class) { app.class = "WeebCore"; }
   app.wnd = MkWnd(app.name, app.class);
   app.flags |= RUNNING;
-  app.ft = MkDefFt();
+  InitAppImgs();
   AppHandle(INIT);
   FlushImgs();
 }
