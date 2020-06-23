@@ -2024,18 +2024,20 @@ void On(int msg, AppHandler handler) {
   }
 }
 
-static void PruneHandlers(int msg) {
+static void PruneHandlers() {
   if (app.flags & DIRTY) {
-    int i;
-    AppHandler* handlers = app.handlers[msg];
-    AppHandler* newHandlers = 0;
-    for (i = 0; i < ArrLen(handlers); ++i) {
-      if (handlers[i]) {
-        ArrCat(&newHandlers, handlers[i]);
+    int i, msg;
+    for (msg = 0; msg < LAST_EVENT_TYPE; ++msg) {
+      AppHandler* handlers = app.handlers[msg];
+      AppHandler* newHandlers = 0;
+      for (i = 0; i < ArrLen(handlers); ++i) {
+        if (handlers[i]) {
+          ArrCat(&newHandlers, handlers[i]);
+        }
       }
+      RmArr(handlers);
+      app.handlers[msg] = newHandlers;
     }
-    RmArr(handlers);
-    app.handlers[msg] = newHandlers;
     app.flags &= ~DIRTY;
   }
 }
@@ -2107,7 +2109,7 @@ static void AppHandle(int msg) {
   for (i = 0; i < ArrLen(handlers); ++i) {
     handlers[i]();
   }
-  PruneHandlers(msg);
+  PruneHandlers();
 }
 
 int AppMain(int argc, char* argv[]) {
