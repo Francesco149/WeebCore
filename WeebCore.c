@@ -420,7 +420,7 @@ enum {
   SIZE,
   INIT,
   FRAME,
-  LAST_EVENT_TYPE
+  LAST_MSG_TYPE
 };
 
 /* flags for the bitfield returned by MsgKeyState */
@@ -2000,7 +2000,7 @@ static struct _Globals {
   int argc;
   char** argv;
   Wnd wnd;
-  AppHandler* handlers[LAST_EVENT_TYPE];
+  AppHandler* handlers[LAST_MSG_TYPE];
   int flags;
 
   /* params */
@@ -2019,7 +2019,7 @@ int Argc() { return app.argc; }
 char* Argv(int i) { return app.argv[i]; }
 
 void On(int msg, AppHandler handler) {
-  if (msg >= 0 && msg < LAST_EVENT_TYPE) {
+  if (msg >= 0 && msg < LAST_MSG_TYPE) {
     ArrCat(&app.handlers[msg], handler);
   }
 }
@@ -2027,7 +2027,7 @@ void On(int msg, AppHandler handler) {
 static void PruneHandlers() {
   if (app.flags & DIRTY) {
     int i, msg;
-    for (msg = 0; msg < LAST_EVENT_TYPE; ++msg) {
+    for (msg = 0; msg < LAST_MSG_TYPE; ++msg) {
       AppHandler* handlers = app.handlers[msg];
       AppHandler* newHandlers = 0;
       for (i = 0; i < ArrLen(handlers); ++i) {
@@ -2044,9 +2044,9 @@ static void PruneHandlers() {
 
 /* we cannot change the size of handlers because this could be called while iterating them.
  * so we set a dirty flags that tells it to recompact the handlers array after we are done handling
- * this event */
+ * this msg */
 void RmHandler(int msg, AppHandler handler) {
-  if (msg >= 0 && msg < LAST_EVENT_TYPE) {
+  if (msg >= 0 && msg < LAST_MSG_TYPE) {
     int i;
     AppHandler* handlers = app.handlers[msg];
     for (i = 0; i < ArrLen(handlers); ++i) {
@@ -2098,7 +2098,7 @@ void RmApp() {
   }
   RmArr(app.pages);
   RmArr(app.regions);
-  for (i = 0; i < LAST_EVENT_TYPE; ++i) {
+  for (i = 0; i < LAST_MSG_TYPE; ++i) {
     RmArr(app.handlers[i]);
   }
 }
