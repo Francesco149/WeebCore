@@ -5,28 +5,6 @@ this is a very early work-in-progress. at its current state it's barely more tha
 
 all of the code and assets are public domain unless stated otherwise
 
-# philosophy
-
-* modular design - no platform specific code in the core code, just provide a platform interface
-  that could be implemented for any platform
-* failure is an option - cutting corners to make code simpler and programming more fun is fine.
-  not trying to cover every use/edge case
-* stick to C89 standard for maximum compatibility (platform specific code may use newer features)
-* minimal boilerplate. you should be able to get something on screen with as few lines of code as
-  possible without writing any long winded setup code
-* FFI friendly: only expose functions and enums whenever possible, do not include any preprocessor
-  conditional code in the interface.  C macros should all be optional or minor features
-* minimal dependencies. instead of including a library, implement the minimal subset needed to do
-  what you need to do
-* minimal lines of code, but prioritize simplicity over code golfing. ideally the codebase stays
-  small enough that the entire thing should compile almost instantly
-* I want it to have its own tools and ecosystem to give it a bit more personality. for example I'm
-  currently bootstrapping fonts and ui with a basic sprite editor I wrote and saving sprites to a
-  custom wbspr format I've made. it should bootstrap itself, because it's fun.
-* use short but easy to type names. disregard any potential for name clashes with other libraries
-  as the focus is on minimal dependencies
-* don't be afraid to break api if that means nicer/less code
-
 # your first window
 
 I want it to be as painless as possible to get something on screen so you can have fun prototyping
@@ -58,6 +36,28 @@ void AppInit() {
 note that the platform include is absolutely optional and you can implement your own platform later.
 WeebCore.c does not use any external library and doesn't include anything, not even the standard C
 library
+
+# philosophy
+
+* modular design - no platform specific code in the core code, just provide a platform interface
+  that could be implemented for any platform
+* failure is an option - cutting corners to make code simpler and programming more fun is fine.
+  not trying to cover every use/edge case
+* stick to C89 standard for maximum compatibility (platform specific code may use newer features)
+* minimal boilerplate. you should be able to get something on screen with as few lines of code as
+  possible without writing any long winded setup code
+* FFI friendly: only expose functions and enums whenever possible, do not include any preprocessor
+  conditional code in the interface.  C macros should all be optional or minor features
+* minimal dependencies. instead of including a library, implement the minimal subset needed to do
+  what you need to do
+* minimal lines of code, but prioritize simplicity over code golfing. ideally the codebase stays
+  small enough that the entire thing should compile almost instantly
+* I want it to have its own tools and ecosystem to give it a bit more personality. for example I'm
+  currently bootstrapping fonts and ui with a basic sprite editor I wrote and saving sprites to a
+  custom wbspr format I've made. it should bootstrap itself, because it's fun.
+* use short but easy to type names. disregard any potential for name clashes with other libraries
+  as the focus is on minimal dependencies
+* don't be afraid to break api if that means nicer/less code
 
 # portability
 at the moment the platform assumptions in the core logic are
