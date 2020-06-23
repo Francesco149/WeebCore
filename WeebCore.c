@@ -56,6 +56,12 @@ Wnd AppWnd();
 ImgPtr ImgAlloc(int width, int height);
 void ImgFree(ImgPtr img);
 
+/* discard EVERYTHING allocated on the img allocator. reinitialize built in textures such as the
+ * default ft. this invalidates all ImgPtr's.
+ * this is more optimal than freeing each ImgPtr individually if you are going to re-allocate new
+ * stuff because freeing always leads to fragmentation over time */
+void ClrImgs();
+
 /* copy raw pixels dx, dy in the img. anything outside the img size is cropped out.
  * note that this replaces pixels. it doesn't do any kind of alpha blending */
 void ImgCpyEx(ImgPtr ptr, int* pixs, int width, int height, int dx, int dy);
@@ -2071,6 +2077,23 @@ static Ft MkDefFt() {
 
 Ft DefFt() { return app.ft; }
 
+static void NukeImgs() {
+  int i;
+  for (i = 0; i < ArrLen(app.pages); ++i) {
+    ImgPage* page = &app.pages[i];
+    RmImg(page->img);
+    RmPacker(page->pak);
+    Free(page->pixs);
+  }
+  RmArr(app.pages);
+  RmArr(app.regions);
+}
+
+void ClrImgs() {
+  NukeImgs();
+  app.ft = MkDefFt();
+}
+
 void MkApp(int argc, char* argv[]) {
   app.argc = argc;
   app.argv = argv;
@@ -2087,14 +2110,7 @@ void MkApp(int argc, char* argv[]) {
 void RmApp() {
   int i;
   AppHandle(QUIT);
-  for (i = 0; i < ArrLen(app.pages); ++i) {
-    ImgPage* page = &app.pages[i];
-    RmImg(page->img);
-    RmPacker(page->pak);
-    Free(page->pixs);
-  }
-  RmArr(app.pages);
-  RmArr(app.regions);
+  NukeImgs();
   for (i = 0; i < LAST_MSG_TYPE; ++i) {
     RmArr(app.handlers[i]);
   }
