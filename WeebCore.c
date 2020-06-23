@@ -413,13 +413,14 @@ char* I32ToArrStr(int x, int base);
 
 /* message types returned by MsgType */
 enum {
-  QUIT = 1,
+  QUIT_REQUEST = 1,
   KEYDOWN,
   KEYUP,
   MOTION,
   SIZE,
   INIT,
   FRAME,
+  QUIT,
   LAST_MSG_TYPE
 };
 
@@ -592,10 +593,19 @@ enum {
 /*                            MISC DEBUG AND SEMI-INTERNAL INTERFACES                             */
 /* ---------------------------------------------------------------------------------------------- */
 
-/* (automatically called by the platform layer)
- * initializes app and runs the main loop.
- * this also takes care of calling pseudo msgs like INIT, FRAME and calling SwpBufs */
-int AppMain(int argc, char* argv[]);
+/* these could be used to use the app interface from FFI (minus the handlers system unless your ffi
+ * has simple ways to pass callbacks to C). see implementation of AppMain to see how you would do
+ * it from FFI */
+
+/* call the built in app handlers for the current msg */
+int AppHandleMsg();
+
+/* call the built in app handlers for the FRAME msg. this should be called at the start of every
+ * tick of the game loop. note that this not call SwpBufs, you have to call it yourself */
+void AppFrame();
+
+/* true if no QUIT_REQUEST msg has been received */
+int AppRunning();
 
 /* (automatically called by AppMain) initialize the app globals. */
 void MkApp(int argc, char* argv[]);
@@ -603,6 +613,11 @@ void MkApp(int argc, char* argv[]);
 /* (automatically called by AppMain)
  * clean up the app globals (optional, as virtual memory cleans everything up when we exit) */
 void RmApp();
+
+/* (automatically called by the platform layer)
+ * initializes app and runs the main loop.
+ * this also takes care of calling pseudo msgs like INIT, FRAME and calling SwpBufs */
+int AppMain(int argc, char* argv[]);
 
 /* the Diag* api's are mainly used internally for debugging and diagnostics */
 int DiagPageCount();
@@ -644,7 +659,7 @@ void SetWndFPS(Wnd wnd, int fps);
 /* fetch one message. returns non-zero as long as there are more */
 int NextMsg(Wnd wnd);
 
-/* sends QUIT message to the wnd */
+/* sends QUIT_REQUEST message to the wnd */
 void PostQuitMsg(Wnd wnd);
 
 /* these funcs get data from the last message fetched by NextMsg */
@@ -780,6 +795,7 @@ void ClsCol(int color);
 /* to minimize duplication, I decided to have common flags shared by all internal stuff */
 #define DIRTY (1<<0)
 #define ORTHO_DIRTY (1<<1)
+#define RUNNING (1<<2)
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -1997,20 +2013,21 @@ typedef struct _ImgRegion {
 } ImgRegion;
 
 static struct _Globals {
+  /* params */
+  char* name;
+  char* class;
+  int pageSize;
+
   int argc;
   char** argv;
   Wnd wnd;
   AppHandler* handlers[LAST_MSG_TYPE];
   int flags;
 
-  /* params */
-  char* name;
-  char* class;
-  int pageSize;
-
   /* img allocator */
   ImgPage* pages;
   ImgRegion* regions;
+  float flushTimer;
 } app;
 
 Wnd AppWnd() { return app.wnd; }
@@ -2081,6 +2098,15 @@ void SetImgAllocRegion(ImgPtr ptr, float left, float right, float top, float bot
 
 float* ImgAllocRegion(ImgPtr ptr) { return app.regions[ptr - 1].r; }
 
+static void AppHandle(int msg) {
+  AppHandler* handlers = app.handlers[msg];
+  int i;
+  for (i = 0; i < ArrLen(handlers); ++i) {
+    handlers[i]();
+  }
+  PruneHandlers();
+}
+
 void MkApp(int argc, char* argv[]) {
   app.argc = argc;
   app.argv = argv;
@@ -2088,10 +2114,14 @@ void MkApp(int argc, char* argv[]) {
   if (!app.name) { app.name = "WeebCore"; }
   if (!app.class) { app.class = "WeebCore"; }
   app.wnd = MkWnd(app.name, app.class);
+  app.flags |= RUNNING;
+  AppHandle(INIT);
+  FlushImgs();
 }
 
 void RmApp() {
   int i;
+  AppHandle(QUIT);
   for (i = 0; i < ArrLen(app.pages); ++i) {
     ImgPage* page = &app.pages[i];
     RmImg(page->img);
@@ -2105,37 +2135,35 @@ void RmApp() {
   }
 }
 
-static void AppHandle(int msg) {
-  AppHandler* handlers = app.handlers[msg];
-  int i;
-  for (i = 0; i < ArrLen(handlers); ++i) {
-    handlers[i]();
+int AppHandleMsg() {
+  int msg = MsgType(app.wnd);
+  AppHandle(msg);
+  if (msg == QUIT_REQUEST) {
+    app.flags &= ~RUNNING;
+    return 0;
   }
-  PruneHandlers();
+  return 1;
 }
 
+void AppFrame() {
+  AppHandle(FRAME);
+  app.flushTimer += Delta();
+  if (app.flushTimer >= 1) {
+    FlushImgs();
+    app.flushTimer = 0;
+  }
+}
+
+int AppRunning() { return app.flags & RUNNING; }
+
 int AppMain(int argc, char* argv[]) {
-  float flushTimer = 0;
   MkApp(argc, argv);
-  AppHandle(INIT);
-  FlushImgs();
-  while (1) {
-    while (NextMsg(app.wnd)) {
-      int msg = MsgType(app.wnd);
-      AppHandle(msg);
-      if (msg == QUIT) {
-        RmApp();
-        return 0;
-      }
-      flushTimer += Delta();
-      if (flushTimer >= 1) {
-        FlushImgs();
-        flushTimer = 0;
-      }
-    }
-    AppHandle(FRAME);
+  while (AppRunning()) {
+    while (NextMsg(app.wnd) && AppHandleMsg());
+    AppFrame();
     SwpBufs(app.wnd);
   }
+  RmApp();
   return 0;
 }
 

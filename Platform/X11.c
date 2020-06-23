@@ -374,7 +374,7 @@ int MouseDY(Wnd wnd) {
 int NextMsg(Wnd wnd) {
   XEvent xev;
   Atom deleteMsg = XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False);
-  while (wnd->msgType != QUIT && XPending(wnd->dpy)) {
+  while (wnd->msgType != QUIT_REQUEST && XPending(wnd->dpy)) {
     XNextEvent(wnd->dpy, &xev);
     MemSet(&wnd->u, 0, sizeof(wnd->u));
     switch (xev.type) {
@@ -447,10 +447,10 @@ int NextMsg(Wnd wnd) {
       }
     }
   }
-  return wnd->msgType == QUIT;
+  return wnd->msgType == QUIT_REQUEST;
 }
 
-void PostQuitMsg(Wnd wnd) { wnd->msgType = QUIT; }
+void PostQuitMsg(Wnd wnd) { wnd->msgType = QUIT_REQUEST; }
 
 static void OsSwpBufs(Wnd wnd) {
   glXSwapBuffers(wnd->dpy, wnd->ptr);
