@@ -2024,6 +2024,8 @@ void On(int msg, AppHandler handler) {
   }
 }
 
+static void Nop() { }
+
 static void PruneHandlers() {
   if (app.flags & DIRTY) {
     int i, msg;
@@ -2031,7 +2033,7 @@ static void PruneHandlers() {
       AppHandler* handlers = app.handlers[msg];
       AppHandler* newHandlers = 0;
       for (i = 0; i < ArrLen(handlers); ++i) {
-        if (handlers[i]) {
+        if (handlers[i] == Nop) {
           ArrCat(&newHandlers, handlers[i]);
         }
       }
@@ -2051,7 +2053,7 @@ void RmHandler(int msg, AppHandler handler) {
     AppHandler* handlers = app.handlers[msg];
     for (i = 0; i < ArrLen(handlers); ++i) {
       if (handlers[i] == handler) {
-        handlers[i] = 0;
+        handlers[i] = Nop;
         app.flags |= DIRTY;
       }
     }
