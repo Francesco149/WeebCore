@@ -100,8 +100,11 @@ void RmEntAt(int i) {
   if (i >= 0 && i < ArrLen(ents)) {
     Ent* e = &ents[i];
     /* for better visualization, blank out the freed img */
-    int* black = Alloc(RectWidth(e->r) * RectHeight(e->r) * sizeof(int));
-    ImgCpy(e->img, black, RectWidth(e->r) + 0.5f, RectHeight(e->r) + 0.5f);
+    /* I add 0.5 because of tiny float errors which can make it round down and be off by 1 */
+    int width = (int)RectWidth(e->r) + 0.5f;
+    int height = (int)RectHeight(e->r) + 0.5f;
+    int* black = Alloc(width * height * sizeof(int));
+    ImgCpy(e->img, black, width, height);
     FlushImgs();
     Free(black);
     ImgFree(e->img);
