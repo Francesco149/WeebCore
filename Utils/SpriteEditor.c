@@ -922,14 +922,14 @@ void EdPut() {
     PutMeshRaw(cutMesh, MulMat(copy, ToTmpMat(trans)), cutImg);
     RmMat(copy);
   }
-  if (flags & ED_FSHOW_CURSOR) {
-    EdPutCursor();
-  }
   if (flags & ED_FSELECT) {
     EdPutSelect();
   }
   if (tool == ED_COLOR_PICKER) {
     EdPutColPicker();
+  }
+  if (flags & ED_FSHOW_CURSOR) {
+    EdPutCursor();
   }
   if (flags & ED_FHELP) {
     PutMesh(helpBgMesh, 0, 0);
