@@ -383,6 +383,7 @@ int RoundUpToPowerOfTwo(int x);
 /* null-terminated string utils */
 int StrLen(char* s);
 void StrCpy(char* dst, char* src);
+int StrCmp(char* a, char* b);
 
 /* mem utils */
 int MemCmp(void* a, void* b, int n);
@@ -400,6 +401,7 @@ int DecI32(char** pData);
 void CatI32(char** pArr, int x);
 
 void SwpFlts(float* a, float* b);
+void SwpPtrs(void** a, void** b);
 
 /* encode data to a b64 string. returned string must be freed with Free */
 char* ToB64(void* data, int dataSize);
@@ -412,6 +414,11 @@ void ArrStrCatI32(char** arr, int x, int base);
 
 /* like ArrStrCatI32 but creates an arr on the fly and null terminates it. must be rmd with RmArr */
 char* I32ToArrStr(int x, int base);
+
+typedef int QsortCmp(void*, void*);
+
+void Qsort(void** arr, int len, QsortCmp* cmp);
+void QsortStrs(char** strarr, int len);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                      ENUMS AND CONSTANTS                                       */
@@ -1004,6 +1011,16 @@ void StrCpy(char* dst, char* src) {
   }
 }
 
+int StrCmp(char* a, char* b) {
+  while (1) {
+    if (*a < *b) { return -1; }
+    else if (*a > *b) { return 1; }
+    if (!*a || !*b) { break; }
+    ++a; ++b;
+  }
+  return 0;
+}
+
 int DecVarI32(char** pData) {
   unsigned char* p;
   int res = 0, shift = 0, more = 1;
@@ -1078,6 +1095,12 @@ void SwpFlts(float* a, float* b) {
   *b = tmp;
 }
 
+void SwpPtrs(void** a, void** b) {
+  void* tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
+
 char* I32ToArrStr(int x, int base) {
   char* res = 0;
   ArrStrCatI32(&res, x, base);
@@ -1106,6 +1129,34 @@ void ArrStrCatI32(char** res, int x, int base) {
     ArrCat(res, tmp[tmplen - i - 1]);
   }
   RmArr(tmp);
+}
+
+void QsortStrs(char** strarr, int len) {
+  Qsort((void**)strarr, len, (QsortCmp*)StrCmp);
+}
+
+static int QsortPart(void** arr, int len, QsortCmp* cmp, int lo, int hi) {
+  void* pivot = arr[hi];
+  int i = 0, j;
+  for (j = 0; j < hi; ++j) {
+    if (cmp(arr[j], pivot) <= 0) {
+      SwpPtrs(&arr[i++], &arr[j]);
+    }
+  }
+  SwpPtrs(&arr[i], &arr[hi]);
+  return i;
+}
+
+static void QsortImpl(void** arr, int len, QsortCmp* cmp, int lo, int hi) {
+  if (lo < hi) {
+    int pivot = QsortPart(arr, len, cmp, lo, hi);
+    QsortImpl(arr, len, cmp, lo, pivot - 1);
+    QsortImpl(arr, len, cmp, pivot + 1, hi);
+  }
+}
+
+void Qsort(void** arr, int len, QsortCmp* cmp) {
+  QsortImpl(arr, len, cmp, 0, len - 1);
 }
 
 /* ---------------------------------------------------------------------------------------------- */
