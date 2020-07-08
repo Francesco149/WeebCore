@@ -9,6 +9,9 @@ typedef struct _Trans* Trans;
 typedef struct _Packer* Packer;
 typedef struct _Wnd* Wnd;
 typedef struct _Mat* Mat;
+typedef struct _Arena* Arena;
+typedef struct _Map* Map;
+typedef struct _Hash* Hash;
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                          APP INTERFACE                                         */
@@ -313,7 +316,16 @@ void PutFt(Ft ft, int col, int x, int y, char* string);
 
 void RmArr(void* array);
 int ArrLen(void* array);
+int ArrCap(void* array);
 void SetArrLen(void* array, int len);
+
+/* compare the raw memory of a and b using MemCmp */
+int ArrMemCmp(void* a, void* b);
+
+/* join array of strs into one str where every element is separated by separator */
+char* ArrStrJoin(char** array, char* separator);
+
+#define ArrDup(arr) ArrDupEx(arr, sizeof(arr[0]))
 
 /* shorthand macro to append a single element to the array */
 #define ArrCat(pArr, x) { \
@@ -337,6 +349,64 @@ void ArrStrCat(char** pArr, char* str);
 
 void* ArrReserveEx(void** pArr, int elementSize, int numElements);
 void* ArrAllocEx(void** pArr, int elementSize, int numElements);
+void* ArrDupEx(void* array, int elementSize);
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                           ARENA                                                */
+/*                                                                                                */
+/* simple allocator that pre-allocs chunks of memory for a more contiguous allocation but isn't   */
+/* as expensive as resizing an Arr because it doesn't realloc                                     */
+/* ---------------------------------------------------------------------------------------------- */
+
+Arena MkArena();
+Arena MkArenaEx(int chunkSize);
+void RmArena(Arena arena);
+
+/* if n is bigger than the chunk size, a new chunk at least as big as n will be allocated */
+void* ArenaAlloc(Arena arena, int n);
+void* ArenaMemDup(Arena arena, void* p, int n);
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                             MAP                                                */
+/*                                                                                                */
+/* sparse array that maps integers to values                                                      */
+/* ---------------------------------------------------------------------------------------------- */
+
+Map MkMap();
+void RmMap(Map map);
+void MapSet(Map map, int key, void* val);
+void* MapGet(Map map, int key);
+
+/* return the number of collisions (keys that hashed to the same value). this is mostly used for
+ * debugging and checking whether the map is operating as intended */
+int MapColls(Map map);
+
+/* these functions can be used to iterate keys */
+int MapNumKeys(Map map);
+int MapKey(Map map, int i);
+
+/* ---------------------------------------------------------------------------------------------- */
+/*                                             HASH                                               */
+/*                                                                                                */
+/* sparse array that maps strings to values                                                       */
+/* ---------------------------------------------------------------------------------------------- */
+
+Hash MkHash();
+void RmHash(Hash hash);
+/* note that Hash manages its own internal copies of the key, there's no need to keep it around */
+void HashSet(Hash hash, char* key, void* val);
+void HashSetb(Hash hash, void* keyData, int keySize, void* val);
+void* HashGet(Hash hash, char* key);
+void* HashGetb(Hash hash, char* keyData, int keySize);
+int HashHas(Hash hash, char* key);
+int HashHasb(Hash hash, char* keyData, int keySize);
+
+int HashColls(Hash map); /* see MapColls */
+
+/* these functions can be used to iterate keys */
+int HashNumKeys(Hash hash);
+void* HashKey(Hash hash, int i);
+int HashKeyLen(Hash hash, int i);
 
 /* ---------------------------------------------------------------------------------------------- */
 /*                                         RECT PACKER                                            */
@@ -380,6 +450,12 @@ void PackFree(Packer pak, float* rect);
 /* return the closest power of two that is higher than x */
 int RoundUpToPowerOfTwo(int x);
 
+/* return the closest multiple of a that is lower than value. a must be a power of 2 */
+int AlignDownToPowerOfTwo(int x, int a);
+
+/* return the closest multiple of a that is higher than value. a must be a power of 2 */
+int AlignUpToPowerOfTwo(int x, int a);
+
 /* null-terminated string utils */
 int StrLen(char* s);
 void StrCpy(char* dst, char* src);
@@ -387,6 +463,7 @@ int StrCmp(char* a, char* b);
 
 /* mem utils */
 int MemCmp(void* a, void* b, int n);
+void* MemDup(void* p, int n);
 
 /* protobuf style varints. encoded in base 128. each byte contains 7 bits of the integer and the
  * msb is set if there's more. byte order is little endian */
@@ -407,6 +484,9 @@ void SwpPtrs(void** a, void** b);
 char* ToB64(void* data, int dataSize);
 char* ArrToB64(char* data);
 char* ArrFromB64(char* b64Data);
+
+int HashStr(void* data, int len);
+int HashI32(int x);
 
 /* converts x to a string with the specified base and appends the characters to arr.
    base is clamped to 1-16 */
@@ -824,10 +904,26 @@ int ArrLen(void* array) {
   return GetArrHdr(array)->length;
 }
 
+int ArrCap(void* array) {
+  if (!array) return 0;
+  return GetArrHdr(array)->capacity;
+}
+
 void SetArrLen(void* array, int length) {
   if (array) {
     GetArrHdr(array)->length = length;
   }
+}
+
+int ArrMemCmp(void* a, void* b) {
+  int alen = ArrLen(a);
+  int blen = ArrLen(b);
+  if (alen > blen) {
+    return 1;
+  } else if (alen < blen) {
+    return -1;
+  }
+  return MemCmp(a, b, alen);
 }
 
 void ArrStrCat(char** pArr, char* str) {
@@ -865,6 +961,304 @@ void* ArrAllocEx(void** pArr, int elementSize, int numElements) {
   SetArrLen(*pArr, ArrLen(*pArr) + numElements);
   return res;
 }
+
+void* ArrDupEx(void* array, int elementSize) {
+  void* res = 0;
+  ArrAllocEx(&res, elementSize, ArrLen(array));
+  if (res) {
+    MemCpy(res, array, ArrLen(array) * elementSize);
+  }
+  return res;
+}
+
+char* ArrStrJoin(char** array, char* separator) {
+  int i;
+  char* res = 0;
+  for (i = 0; i < ArrLen(array); ++i) {
+    ArrStrCat(&res, array[i]);
+    ArrStrCat(&res, separator);
+  }
+  ArrCat(&res, 0);
+  return res;
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+
+struct _Arena {
+  char** chunks;
+  char* p;
+  int freeBytes;
+  int minChunkSize;
+};
+
+Arena MkArena() { return MkArenaEx(1024); }
+
+Arena MkArenaEx(int chunkSize) {
+  Arena arena = Alloc(sizeof(struct _Arena));
+  if (arena) {
+    arena->minChunkSize = chunkSize;
+  }
+  return arena;
+}
+
+void RmArena(Arena arena) {
+  if (arena) {
+    int i;
+    for (i = 0; i < ArrLen(arena->chunks); ++i) {
+      Free(arena->chunks[i]);
+    }
+    RmArr(arena->chunks);
+  }
+  Free(arena);
+}
+
+void* ArenaAlloc(Arena arena, int n) {
+  void* res;
+  if (arena->freeBytes < n) {
+    int size = Max(n, arena->minChunkSize);
+    size = AlignUpToPowerOfTwo(size, 8);
+    ArrCat(&arena->chunks, Alloc(size));
+    arena->p = arena->chunks[ArrLen(arena->chunks) - 1];
+    arena->freeBytes = size;
+  }
+  res = arena->p;
+  if (!res) {
+    return 0;
+  }
+  arena->p += AlignUpToPowerOfTwo(n, 8);
+  return res;
+}
+
+void* ArenaMemDup(Arena arena, void* p, int n) {
+  void* res = ArenaAlloc(arena, n);
+  if (res) {
+    MemCpy(res, p, n);
+  }
+  return res;
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+
+typedef struct _MapItem {
+  void* val;
+  int key;
+} MapItem;
+
+struct _Map {
+  MapItem* arr;
+  int* keys;
+  int* isset; /* bit mask of set indices into arr. this way we don't have to reserve zero kvals */
+};
+
+Map MkMap() {
+  return Alloc(sizeof(struct _Map));
+}
+
+static void RmMapContents(Map map) {
+  if (map) {
+    RmArr(map->arr);
+    RmArr(map->keys);
+    RmArr(map->isset);
+  }
+}
+
+static void RmMapContainer(Map map) {
+  Free(map);
+}
+
+void RmMap(Map map) {
+  RmMapContents(map);
+  RmMapContainer(map);
+}
+
+static int MapIsSet(Map map, int i) {
+  return map->isset[i / 32] & (0x80000000 >> (i % 32));
+}
+
+void MapSet(Map map, int key, void* val) {
+  int starti, i;
+  int cap = ArrCap(map->arr);
+  if (2 * ArrLen(map->keys) >= cap) {
+    Map new = MkMap();
+    if (!cap) {
+      cap = 16;
+    }
+    cap *= 2;
+    ArrAlloc(&new->arr, cap);
+    ArrAlloc(&new->isset, Max(cap / 32, 1));
+    for (i = 0; i < ArrLen(map->keys); ++i) {
+      MapSet(new, map->keys[i], MapGet(map, map->keys[i]));
+    }
+    RmMapContents(map);
+    *map = *new;
+    RmMapContainer(new);
+  }
+  starti = HashI32(key) % cap;
+  for (i = starti; MapIsSet(map, i) && map->arr[i].key != key;) {
+    i = (i + 1) % cap;
+    if (i == starti) { return; }
+  }
+  map->isset[i / 32] |= 0x80000000 >> (i % 32);
+  map->arr[i].key = key;
+  map->arr[i].val = val;
+}
+
+void* MapGet(Map map, int key) {
+  int starti, i;
+  int cap = ArrCap(map->arr);
+  if (!cap) {
+    return 0;
+  }
+  starti = HashI32(key) % cap;
+  for (i = starti; map->arr[i].key != key;) {
+    i = (i + 1) % cap;
+    if (i == starti) { return 0; }
+  }
+  return map->arr[i].val;
+}
+
+int MapColls(Map map) {
+  int i;
+  int colls = 0;
+  Map counts = MkMap();
+  for (i = 0; i < ArrLen(map->keys); ++i) {
+    int hash = HashI32(map->keys[i]);
+    MapSet(counts, hash, (void*)((int)MapGet(counts, hash) + 1));
+  }
+  for (i = 0; i < ArrLen(counts->keys); ++i) {
+    colls += (int)MapGet(counts, counts->keys[i]) - 1;
+  }
+  RmMap(counts);
+  return colls;
+}
+
+int MapNumKeys(Map map) { return ArrLen(map->keys); }
+int MapKey(Map map, int i) { return map->keys[i]; }
+
+/* ---------------------------------------------------------------------------------------------- */
+
+/* we build this on top of a regular Map. we hash the keys and use the hash as the Map key. each Map
+ * entry is a linked list of HashItems. if there are any collisions, we walk down the list until we
+ * find the right key.
+ * going through 2 hashes (bytes -> int, int -> int) is probably unnecessary but it lets us not
+ * duplicate most of the Map code */
+
+typedef struct _HashKeyData {
+  char* data;
+  int len;
+} HashKeyData;
+
+static int HashKeyCmp(HashKeyData* key, void* data, int len) {
+  if (key->len < len) { return -1; }
+  if (key->len > len) { return  1; }
+  return MemCmp(key->data, data, len);
+}
+
+typedef struct _HashItem {
+  struct _HashItem* next;
+  HashKeyData key;
+  void* val;
+} HashItem;
+
+struct _Hash {
+  Arena arena;
+  Map map;
+  HashKeyData* keys;
+};
+
+Hash MkHash() {
+  Hash hash = Alloc(sizeof(struct _Hash));
+  if (hash) {
+    hash->arena = MkArena();
+    hash->map = MkMap();
+  }
+  return hash;
+}
+
+void RmHash(Hash hash) {
+  if (hash) {
+    RmMap(hash->map);
+    RmArena(hash->arena);
+    RmArr(hash->keys);
+  }
+  Free(hash);
+}
+
+void HashSet(Hash hash, char* key, void* val) {
+  HashSetb(hash, key, StrLen(key) + 1, val); /* include null terminator just in case */
+}
+
+void HashSetb(Hash hash, void* keyData, int keySize, void* val) {
+  int strhash = HashStr(keyData, keySize);
+  HashItem* bucket = MapGet(hash->map, strhash);
+  HashItem* it;
+  for (it = bucket; it; it = it->next) {
+    if (!HashKeyCmp(&it->key, keyData, keySize)) {
+      it->val = val;
+      return;
+    }
+  }
+  /* key was not found, so create it */
+  it = ArenaAlloc(hash->arena, sizeof(HashItem));
+  it->key.data = ArenaMemDup(hash->arena, keyData, keySize);
+  it->key.len = keySize;
+  it->val = val;
+  it->next = bucket;
+  MapSet(hash->map, strhash, it);
+  ArrCat(&hash->keys, it->key);
+}
+
+void* HashGet(Hash hash, char* key) {
+  return HashGetb(hash, key, StrLen(key) + 1);
+}
+
+static void* HashCheckedGet(Hash hash, char* keyData, int keySize, void** pkey) {
+  int strhash = HashStr(keyData, keySize);
+  HashItem* bucket = MapGet(hash->map, strhash);
+  HashItem* it;
+  for (it = bucket; it; it = it->next) {
+    if (!HashKeyCmp(&it->key, keyData, keySize)) {
+      *pkey = it->key.data;
+      return it->val;
+    }
+  }
+  *pkey = 0;
+  return 0;
+}
+
+void* HashGetb(Hash hash, char* keyData, int keySize) {
+  void* key;
+  return HashCheckedGet(hash, keyData, keySize, &key);
+}
+
+int HashHas(Hash hash, char* key) {
+  return HashHasb(hash, key, StrLen(key));
+}
+
+int HashHasb(Hash hash, char* keyData, int keySize) {
+  void* key;
+  HashCheckedGet(hash, keyData, keySize, &key);
+  return key != 0;
+}
+
+int HashColls(Hash hash) {
+  int i, colls = 0;
+  Map counts = MkMap();
+  for (i = 0; i < ArrLen(hash->keys); ++i) {
+    HashKeyData* k = &hash->keys[i];
+    int strhash = HashStr(k->data, k->len);
+    MapSet(counts, strhash, (void*)((int)MapGet(counts, strhash) + 1));
+  }
+  for (i = 0; i < ArrLen(counts->keys); ++i) {
+    colls += (int)MapGet(counts, counts->keys[i]) - 1;
+  }
+  RmMap(counts);
+  return colls + MapColls(hash->map);
+}
+
+int HashNumKeys(Hash hash) { return ArrLen(hash->keys); }
+void* HashKey(Hash hash, int i) { return hash->keys[i].data; }
+int HashKeyLen(Hash hash, int i) { return hash->keys[i].len; }
 
 /* ---------------------------------------------------------------------------------------------- */
 
@@ -1089,6 +1483,12 @@ int MemCmp(void* a, void* b, int n) {
   return 0;
 }
 
+void* MemDup(void* p, int n) {
+  void* new = Alloc(n);
+  if (new) { MemCpy(new, p, n); }
+  return new;
+}
+
 void SwpFlts(float* a, float* b) {
   float tmp = *a;
   *a = *b;
@@ -1100,6 +1500,27 @@ void SwpPtrs(void** a, void** b) {
   *a = *b;
   *b = tmp;
 }
+
+int HashStr(void* data, int len) {
+  int i;
+  char* p = (char*)data;
+  int x = 0x811c9dc5;
+  for (i = 0; i < len; ++i) {
+    x ^= p[i];
+    x *= 0x1000193;
+    x ^= x >> 16;
+  }
+  return x;
+}
+
+int HashI32(int x) {
+  x *= 0x85ebca6b;
+  x ^= x >> 16;
+  return x;
+}
+
+int AlignDownToPowerOfTwo(int x, int a) { return x & ~(a - 1); }
+int AlignUpToPowerOfTwo(int x, int a) { return AlignDownToPowerOfTwo(x + a - 1, a); }
 
 char* I32ToArrStr(int x, int base) {
   char* res = 0;
