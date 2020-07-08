@@ -137,7 +137,7 @@ Wnd MkWnd(char* name, char* class) {
   XMapWindow(wnd->dpy, wnd->ptr);
   XFree(vi);
 
-  SetWndFPS(wnd, 10000);
+  SetWndFPS(wnd, 420);
   wnd->lastTime = MkOsTime();
   wnd->now = MkOsTime();
   UpdateTime(wnd);
